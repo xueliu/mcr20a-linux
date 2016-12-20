@@ -12,7 +12,7 @@ Linux kernel drivers for NXP MCR20A IEEE 802.15.4 transceiver. This project is a
 
 ## Install
 
-Gerneral: The Linux kbuild system must be used to build the driver as a kernel module.
+Gerneral local compile: The Linux kbuild system must be used to build the driver as a kernel module.
 
 The command to build an external module is:
 ```
@@ -36,19 +36,30 @@ The built module can be found at /lib/modules/\`uname -r\`/extra/**mcr20a** and 
 ```
 sudo modprobe mcr20a
 ```
+
+Gerneral cross compile
+
 Information about the hardware is specified in the Linux device tree. The device tree file will be platform specific but for any tree a section must be added within the section for the relevant spi bus for the mcr20a. See Docs/devicetree/mcr20a.txt for more info.
 
 ### Install in Raspberry Pi 3B
 
 ## Hardware
+### Raspberry Pi 3B
 
-```
-```
+### RPI Arduino Sheild Add-on V2.0
+[wiki](https://www.itead.cc/wiki/RPI_Arduino_Sheild_Add-on_V2.0)
+[schematic](https://www.itead.cc/wiki/images/d/df/IM150627002-RPI_arduino_shield_add-on-schematic.pdf)
+* Using 3v3 mode
+
+### FRDM-CR20A
+[Link](http://www.nxp.com/products/software-and-tools/hardware-development-tools/freedom-development-boards/freedom-development-board-for-mcr20a-wireless-transceiver:FRDM-CR20A#overview)
+* Switch J7 connecting position 1
 
 ## Test
+[wpan-tools](https://github.com/linux-wpan/wpan-tools)
 
 ## TODO
-
+- [ ] spi_async
 - [ ] Dual PAN
 - [ ] TRX with RX ACK
 - [ ] Low-power receive mode (LPPS)
