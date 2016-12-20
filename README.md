@@ -1,2 +1,8 @@
 # mcr20a-linux
-mcr20a Linux driver
+Linux kernel drivers for NXP MCR20A IEEE 802.15.4 transceiver.
+
+# Hardware
+
+# Software
+
+# TODO List
