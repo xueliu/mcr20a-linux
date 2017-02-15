@@ -1,0 +1,55 @@
+/dts-v1/;
+/plugin/;
+
+/* Overlay for NXP MCR20A IEEE 802.15.4 WPAN transceiver on spi0.0 */
+
+/ {
+	compatible = "brcm,bcm2835", "brcm,bcm2836", "brcm,bcm2708", "brcm,bcm2709";
+
+	fragment@0 {
+		target = <&spi0>;
+		__overlay__ {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			status = "okay";
+
+			mcr20a: mcr20a@0 {
+				compatible = "nxp,mcr20a";
+				reg = <0>;
+				interrupt-parent = <&gpio>;
+				interrupts = <17 2>; // IRQF_TRIGGER_FALLING
+				rst_b-gpio = <&gpio 27 1>;
+				/* As RM said, mcr20a can support 9 MHz read accesses
+				and 16MHz write accesses. But lower frequency is stable*/
+				spi-max-frequency = <4000000>;
+			};
+		};
+	};
+
+	fragment@1 {
+		target = <&spidev0>;
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	fragment@2 {
+		target = <&gpio>;
+		__overlay__ {
+			mcr20a_pins: mcr20a_pins {
+				brcm,pins = <17 27>;
+				brcm,function = <0 1>; /* in out */
+			};
+		};
+	};
+
+	__overrides__ {
+		interrupt = <&mcr20a>, "interrupts:0",
+			<&mcr20a_pins>, "brcm,pins:0";
+		reset     = <&mcr20a>, "rst_b-gpio:4",
+			<&mcr20a_pins>, "brcm,pins:4";
+		speed     = <&mcr20a>, "spi-max-frequency:0";
+		trim      = <&mcr20a>, "xtal-trim.0";
+	};
+};
