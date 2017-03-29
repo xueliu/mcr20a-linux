@@ -596,7 +596,7 @@ mcr20a_dar_multi_read(struct mcr20a_local *lp, u8 reg, u8 len, u8 *data) {
 	spi_message_add_tail(&xfer_header, &msg);
 	spi_message_add_tail(&xfer_data, &msg);
 
-	mutex_lock(&lp->buffer_mutex);
+//	mutex_lock(&lp->buffer_mutex);
 	lp->buf[0] = MCR20A_READ_REG(reg);
 	dev_dbg(&lp->spi->dev, "dar addr = %02x\n", reg);
 	status = spi_sync(lp->spi, &msg);
@@ -605,7 +605,7 @@ mcr20a_dar_multi_read(struct mcr20a_local *lp, u8 reg, u8 len, u8 *data) {
 	dev_dbg(&lp->spi->dev,
 			"spi status = %d\n", status);
 	if (msg.status) status = msg.status;
-	mutex_unlock(&lp->buffer_mutex);
+//	mutex_unlock(&lp->buffer_mutex);
 	dev_dbg(&lp->spi->dev, "IRQSTS0 = %02x\n", lp->buf[0]);
 
 	return status;
@@ -635,7 +635,7 @@ mcr20a_dar_multi_write(struct mcr20a_local *lp, u8 reg, u8 len, u8 *data) {
 	spi_message_add_tail(&xfer_header, &msg);
 	spi_message_add_tail(&xfer_data, &msg);
 
-	mutex_lock(&lp->buffer_mutex);
+//	mutex_lock(&lp->buffer_mutex);
 	lp->buf[0] = MCR20A_WRITE_REG(reg);
 	dev_dbg(&lp->spi->dev, "dar addr = %02x\n", reg);
 	status = spi_sync(lp->spi, &msg);
@@ -644,7 +644,7 @@ mcr20a_dar_multi_write(struct mcr20a_local *lp, u8 reg, u8 len, u8 *data) {
 	dev_dbg(&lp->spi->dev,
 			"spi status = %d\n", status);
 	if (msg.status) status = msg.status;
-	mutex_unlock(&lp->buffer_mutex);
+//	mutex_unlock(&lp->buffer_mutex);
 	dev_dbg(&lp->spi->dev, "IRQSTS0 = %02x\n", lp->buf[0]);
 
 	return status;
@@ -669,7 +669,7 @@ mcr20a_iar_multi_write(struct mcr20a_local *lp, u8 reg, u8 len, u8 *data) {
 	spi_message_add_tail(&xfer_header, &msg);
 	spi_message_add_tail(&xfer_data, &msg);
 
-	mutex_lock(&lp->buffer_mutex);
+//	mutex_lock(&lp->buffer_mutex);
 	lp->buf[0] = MCR20A_WRITE_REG(IAR_INDEX);
 	lp->buf[1] = reg;
 	dev_dbg(&lp->spi->dev, "iar addr = %02x\n", reg);
@@ -680,7 +680,7 @@ mcr20a_iar_multi_write(struct mcr20a_local *lp, u8 reg, u8 len, u8 *data) {
 	dev_dbg(&lp->spi->dev,
 			"spi status = %d\n", status);
 	if (msg.status) status = msg.status;
-	mutex_unlock(&lp->buffer_mutex);
+//	mutex_unlock(&lp->buffer_mutex);
 	dev_dbg(&lp->spi->dev, "IRQSTS0 = %02x\n", lp->buf[0]);
 
 	return status;
@@ -1164,27 +1164,27 @@ mcr20a_set_cca_ed_level(struct ieee802154_hw *hw, s32 mbm) {
 	return 0;
 }
 
-static int
-mcr20a_set_csma_params(struct ieee802154_hw *hw, u8 min_be, u8 max_be,
-					   u8 retries) {
-	struct mcr20a_local *lp = hw->priv;
-	dev_info(printdev(lp), "--> mcr20a_set_csma_params(): min_be:%d max_be:%d\n", min_be, max_be);
+//static int
+//mcr20a_set_csma_params(struct ieee802154_hw *hw, u8 min_be, u8 max_be,
+//					   u8 retries) {
+//	struct mcr20a_local *lp = hw->priv;
+//	dev_info(printdev(lp), "--> mcr20a_set_csma_params(): min_be:%d max_be:%d\n", min_be, max_be);
+//
+//	return 0;
+//}
 
-	return 0;
-}
-
-static int
-mcr20a_set_frame_retries(struct ieee802154_hw *hw, s8 retries) {
-	struct mcr20a_local *lp = hw->priv;
-	dev_info(printdev(lp), "--> mcr20a_set_frame_retries():%d\n", retries);
-	return 0;
-}
+//static int
+//mcr20a_set_frame_retries(struct ieee802154_hw *hw, s8 retries) {
+//	struct mcr20a_local *lp = hw->priv;
+//	dev_info(printdev(lp), "--> mcr20a_set_frame_retries():%d\n", retries);
+//	return 0;
+//}
 
 static int
 mcr20a_set_promiscuous_mode(struct ieee802154_hw *hw, const bool on) {
 	struct mcr20a_local *lp = hw->priv;
 	int ret;
-	u8 rxFrameFltReg;
+	u8 rxFrameFltReg = 0x0;
 	u8 val;
 
 	dev_info(printdev(lp), "--> mcr20a_set_promiscuous_mode():%d\n", on);
@@ -1216,19 +1216,19 @@ mcr20a_set_promiscuous_mode(struct ieee802154_hw *hw, const bool on) {
 }
 
 static const struct ieee802154_ops mcr20a_hw_ops = {
-	.owner 					= THIS_MODULE,
-	.xmit_async 			= mcr20a_xmit,
-	.ed 					= mcr20a_ed,
-	.set_channel 			= mcr20a_set_channel,
-	.start 					= mcr20a_start,
-	.stop					= mcr20a_stop,
-	.set_hw_addr_filt 		= mcr20a_set_hw_addr_filt,
-	.set_txpower 			= mcr20a_set_txpower,
-	.set_lbt 				= mcr20a_set_lbt,
-	.set_cca_mode 			= mcr20a_set_cca_mode,
-	.set_cca_ed_level 		= mcr20a_set_cca_ed_level,
-	.set_csma_params 		= mcr20a_set_csma_params,
-	.set_frame_retries 		= mcr20a_set_frame_retries,
+	.owner			= THIS_MODULE,
+	.xmit_async		= mcr20a_xmit,
+	.ed			= mcr20a_ed,
+	.set_channel 		= mcr20a_set_channel,
+	.start 			= mcr20a_start,
+	.stop			= mcr20a_stop,
+	.set_hw_addr_filt 	= mcr20a_set_hw_addr_filt,
+	.set_txpower 		= mcr20a_set_txpower,
+	.set_lbt 		= mcr20a_set_lbt,
+	.set_cca_mode 		= mcr20a_set_cca_mode,
+	.set_cca_ed_level	= mcr20a_set_cca_ed_level,
+//	.set_csma_params 	= mcr20a_set_csma_params,
+//	.set_frame_retries	= mcr20a_set_frame_retries,
 	.set_promiscuous_mode 	= mcr20a_set_promiscuous_mode,
 };
 
@@ -1681,9 +1681,8 @@ mcr20a_hw_setup(struct mcr20a_local *lp) {
 	lp->hw->phy->sifs_period = 12;
 
 	lp->hw->flags = IEEE802154_HW_TX_OMIT_CKSUM |
-		IEEE802154_HW_CSMA_PARAMS |
-		IEEE802154_HW_FRAME_RETRIES | IEEE802154_HW_AFILT |
-		IEEE802154_HW_PROMISCUOUS;
+			IEEE802154_HW_AFILT |
+			IEEE802154_HW_PROMISCUOUS;
 
 	lp->hw->phy->flags = WPAN_PHY_FLAG_TXPOWER |
 		WPAN_PHY_FLAG_CCA_ED_LEVEL |
@@ -1995,7 +1994,7 @@ mcr20a_probe(struct spi_device *spi) {
 	lp->pdata = pdata;
 
 //	spin_lock_init(&lp->lock);
-	init_completion(&lp->seq_complete);
+//	init_completion(&lp->seq_complete);
 
 	/* only PAN0 is supported */
 	lp->pan_id = PAN0;
@@ -2038,7 +2037,7 @@ mcr20a_probe(struct spi_device *spi) {
 	mcr20a_hw_setup(lp);
 
 	/* init sync */
-	mutex_init(&lp->buffer_mutex);
+//	mutex_init(&lp->buffer_mutex);
 
 	spi_set_drvdata(spi, lp);
 
@@ -2091,7 +2090,7 @@ static int mcr20a_remove(struct spi_device *spi) {
 
 	dev_info(&spi->dev, "--> mcr20a_remove()\n");
 
-	mutex_destroy(&lp->buffer_mutex);
+//	mutex_destroy(&lp->buffer_mutex);
 	ieee802154_unregister_hw(lp->hw);
 	ieee802154_free_hw(lp->hw);
 	mcr20a_debugfs_remove();
