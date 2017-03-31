@@ -64,16 +64,6 @@ enum {
 	MCR20A_CCA_MODE3   //
 };
 
-/* mcr20a Modem Operational Modes */
-enum {
-	MCR20A_STATE_OFF,
-	MCR20A_STATE_HIBERNATE,
-	MCR20A_STATE_DOZE,
-	MCR20A_STATE_IDLE,
-	MCR20A_STATE_RECEIVE,
-	MCR20A_STATE_CCA_ED_DETECT
-};
-
 /* MCR20A XCVSEQ */
 enum {
 	MCR20A_XCVSEQ_IDLE 	= 0x00,
@@ -508,23 +498,26 @@ static void
 mcr20a_write_tx_buf_complete(void *context) {
 	struct mcr20a_local *lp = context;
 	int ret;
-	__le16 fcf = ieee802154_get_fc_from_skb(lp->tx_skb);
+//	u8 XCVSEQ;
+//	__le16 fcf = ieee802154_get_fc_from_skb(lp->tx_skb);
 	
 	dev_dbg(printdev(lp), "write_tx_buf_complete()\n");
 
-	if (ieee802154_is_ackreq(fcf)) {
-		regmap_update_bits(lp->regmap_dar, DAR_PHY_CTRL1,
-			DAR_PHY_CTRL1_RXACKRQD, DAR_PHY_CTRL1_RXACKRQD);
-		dev_info(printdev(lp), "tx requires ack\n");
-	} else {
-		regmap_update_bits(lp->regmap_dar, DAR_PHY_CTRL1,
-			DAR_PHY_CTRL1_RXACKRQD, 0x0);
-	}
+//	if (ieee802154_is_ackreq(fcf)) {
+//		regmap_update_bits(lp->regmap_dar, DAR_PHY_CTRL1,
+//			DAR_PHY_CTRL1_RXACKRQD, DAR_PHY_CTRL1_RXACKRQD);
+//		XCVSEQ = MCR20A_XCVSEQ_TR;
+//		dev_info(printdev(lp), "tx requires ack\n");
+//	} else {
+//		regmap_update_bits(lp->regmap_dar, DAR_PHY_CTRL1,
+//			DAR_PHY_CTRL1_RXACKRQD, 0x0);
+//		XCVSEQ = MCR20A_XCVSEQ_TX;
+//	}
 	
-	lp->reg_msg.complete	= NULL;
-	lp->reg_cmd[0]		= MCR20A_WRITE_REG(DAR_PHY_CTRL1);
-	lp->reg_data[0]		= MCR20A_XCVSEQ_TX;
-	lp->reg_xfer_data.len	= 1;
+	lp->reg_msg.complete = NULL;
+	lp->reg_cmd[0]	= MCR20A_WRITE_REG(DAR_PHY_CTRL1);
+	lp->reg_data[0] = MCR20A_XCVSEQ_TX;
+	lp->reg_xfer_data.len = 1;
 
 	ret = spi_async(lp->spi, &lp->reg_msg);
 	if (ret) {
@@ -600,7 +593,8 @@ mcr20a_ed(struct ieee802154_hw *hw, u8 *level) {
 		return 0;
 	} else {
 		/* switch to IDLE at first */
-		regmap_update_bits(lp->regmap_dar, DAR_PHY_CTRL1, DAR_PHY_CTRL1_XCVSEQ_MASK, MCR20A_XCVSEQ_IDLE);
+		regmap_update_bits(lp->regmap_dar, DAR_PHY_CTRL1,
+			DAR_PHY_CTRL1_XCVSEQ_MASK, MCR20A_XCVSEQ_IDLE);
 		return 0;
 	}
 }
@@ -656,7 +650,8 @@ mcr20a_stop(struct ieee802154_hw *hw) {
 	dev_info(printdev(lp), "--> mcr20a_stop()\n");
 	
 	/* stop all running sequence */
-	regmap_update_bits(lp->regmap_dar, DAR_PHY_CTRL1, DAR_PHY_CTRL1_XCVSEQ_MASK, MCR20A_XCVSEQ_IDLE); 
+	regmap_update_bits(lp->regmap_dar, DAR_PHY_CTRL1,
+		DAR_PHY_CTRL1_XCVSEQ_MASK, MCR20A_XCVSEQ_IDLE); 
 
 	/* disable irq */
 	disable_irq(lp->spi->irq);
@@ -675,8 +670,8 @@ mcr20a_stop(struct ieee802154_hw *hw) {
 
 static int
 mcr20a_set_hw_addr_filt(struct ieee802154_hw *hw,
-						struct ieee802154_hw_addr_filt *filt,
-						unsigned long changed) {
+	struct ieee802154_hw_addr_filt *filt,
+	unsigned long changed) {
 	struct mcr20a_local *lp = hw->priv;
 
 	dev_info(printdev(lp), "--> mcr20a_set_hw_addr_filt()\n");
@@ -686,7 +681,6 @@ mcr20a_set_hw_addr_filt(struct ieee802154_hw *hw,
 
 		dev_info(printdev(lp), "set short addr:%02x\n", filt->short_addr);
 
-//		mcr20a_iar_multi_write(lp, IAR_MACSHORTADDRS0_LSB, sizeof(addr), (u8 *)&addr);
 		regmap_write(lp->regmap_iar, IAR_MACSHORTADDRS0_LSB, addr);
 		regmap_write(lp->regmap_iar, IAR_MACSHORTADDRS0_MSB, addr >> 8);
 	}
@@ -695,7 +689,6 @@ mcr20a_set_hw_addr_filt(struct ieee802154_hw *hw,
 		u16 pan = le16_to_cpu(filt->pan_id);
 
 		dev_info(printdev(lp), "set pan id:%02x\n", filt->pan_id);
-//		mcr20a_iar_multi_write(lp, IAR_MACPANID0_LSB, sizeof(pan), (u8 *)&pan);
 		
 		regmap_write(lp->regmap_iar, IAR_MACPANID0_LSB, pan);
 		regmap_write(lp->regmap_iar, IAR_MACPANID0_MSB, pan >> 8);
@@ -706,8 +699,6 @@ mcr20a_set_hw_addr_filt(struct ieee802154_hw *hw,
 		
 		memcpy(addr, &filt->ieee_addr, 8);
 		dev_info(printdev(lp), "set IEEE addr:%llx\n", filt->ieee_addr);
-
-//		mcr20a_iar_multi_write(lp, IAR_MACLONGADDRS0_0, sizeof(filt->ieee_addr), addr)
 		
 		for (i = 0; i < 8; i++)
 			regmap_write(lp->regmap_iar, IAR_MACLONGADDRS0_0 + i, addr[i]);
@@ -717,9 +708,11 @@ mcr20a_set_hw_addr_filt(struct ieee802154_hw *hw,
 		dev_info(printdev(lp),
 				 "mcr20a_set_hw_addr_filt called for panc change\n");
 		if (filt->pan_coord) {
-			regmap_update_bits(lp->regmap_dar, DAR_PHY_CTRL4, DAR_PHY_CTRL4_PANCORDNTR0, 0x10);
+			regmap_update_bits(lp->regmap_dar, DAR_PHY_CTRL4,
+				DAR_PHY_CTRL4_PANCORDNTR0, 0x10);
 		} else {
-			regmap_update_bits(lp->regmap_dar, DAR_PHY_CTRL4, DAR_PHY_CTRL4_PANCORDNTR0, 0x00);;
+			regmap_update_bits(lp->regmap_dar, DAR_PHY_CTRL4,
+				DAR_PHY_CTRL4_PANCORDNTR0, 0x00);;
 		}
 	}
 
@@ -1145,7 +1138,7 @@ mcr20a_irq_clean_complete(void *context) {
 	case (0x03):
 		if (lp->is_tx) {
 			lp->is_tx = 0;
-			dev_info(printdev(lp), "TX is done. NO ACK \n");
+			dev_info(printdev(lp), "TX is done. No ACK \n");
 			mcr20a_handle_tx_complete(lp);
 			return;
 		}
@@ -1164,7 +1157,7 @@ mcr20a_irq_clean_complete(void *context) {
 		if (lp->is_tx) {
 			/* tx is done */
 			lp->is_tx = 0;
-			dev_info(printdev(lp), "TX is done \n");
+			dev_info(printdev(lp), "TX is done. Get ACK \n");
 			mcr20a_handle_tx_complete(lp);
 			return;
 		} else {
@@ -1278,7 +1271,7 @@ static void mcr20a_hw_setup(struct mcr20a_local *lp) {
 
 	phy->cca.mode = NL802154_CCA_ENERGY;
 
-	phy->supported.channels[0] = 0x7FFF800;
+	phy->supported.channels[0] = MCR20A_VALID_CHANNELS;
 	phy->current_page = 0;
 	/* MCR20A reset defualt value */
 	phy->current_channel = 20;
