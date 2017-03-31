@@ -433,7 +433,7 @@ typedef union {
 
 /* SRC_CTRL bits */
 #define DAR_SRC_CTRL_INDEX               (0x0F)
-#define DAR_SRC_CTRL_INDEX_Shift_c       (4)
+#define DAR_SRC_CTRL_INDEX_SHIFT       (4)
 #define DAR_SRC_CTRL_ACK_FRM_PND         BIT(3)
 #define DAR_SRC_CTRL_SRCADDR_EN          BIT(2)
 #define DAR_SRC_CTRL_INDEX_EN            BIT(1)

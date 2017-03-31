@@ -28,8 +28,6 @@
 #include <net/mac802154.h>
 #include <net/cfg802154.h>
 
-//#define DEBUG
-
 #include <linux/device.h>
 
 #include "mcr20a.h"
@@ -59,16 +57,12 @@
 
 /* MCR20A CCA Type */
 enum {
-	MCR20A_CCA_ED,      // energy detect - CCA bit not active, not to be used for T and CCCA sequences
+	MCR20A_CCA_ED,      // energy detect - CCA bit not active, 
+			    // not to be used for T and CCCA sequences
 	MCR20A_CCA_MODE1,   // energy detect - CCA bit ACTIVE
 	MCR20A_CCA_MODE2,   // 802.15.4 compliant signal detect - CCA bit ACTIVE
 	MCR20A_CCA_MODE3   //
 };
-
-typedef enum {
-	PAN_SINGLE,
-	PAN_BOTH
-} PAN_MODE;
 
 /* mcr20a Modem Operational Modes */
 enum {
@@ -80,7 +74,7 @@ enum {
 	MCR20A_STATE_CCA_ED_DETECT
 };
 
-/* MCR20A Phy State*/
+/* MCR20A XCVSEQ */
 enum {
 	MCR20A_XCVSEQ_IDLE 	= 0x00,
 	MCR20A_XCVSEQ_RX	= 0x01,
@@ -102,7 +96,7 @@ enum {
 /* version 0C: new value for ACKDELAY targeting 198us (23 May, 2013, Larry Roshak) */
 #define MCR20A_OVERWRITE_VERSION (0x0C)
 
-/* local const values*/
+/* MCR20A PLL configurations */
 static const u8  PLL_INT[16] =
 {	/* 2405 */ 0x0B,	/* 2410 */ 0x0B,	/* 2415 */ 0x0B,
 	/* 2420 */ 0x0B,	/* 2425 */ 0x0B,	/* 2430 */ 0x0B,
@@ -122,35 +116,34 @@ static const u8 PLL_FRAC[16] =
 };
 
 static const struct reg_sequence mar20a_iar_overwrites[] = {
-	{ IAR_MISC_PAD_CTRL,	0x02 }, // {0x31, 0x02} clear MISO_HIZ_EN (for single SPI master/slave pair) and SPI_PUL_EN (minimize HIB currents)
-	{ IAR_VCO_CTRL1,	0xB3 }, // {0x91, 0xB3} VCO_CTRL1 override VCOALC_REF_TX to 3
-	{ IAR_VCO_CTRL2, 	0x07 }, // {0x92, 0x07} VCO_CTRL2 override VCOALC_REF_RX to 3, keep VCO_BUF_BOOST = 1
-	{ IAR_PA_TUNING, 	0x71 }, // {0x8A, 0x71} PA_TUNING override PA_COILTUNING to 001 (27 Nov 2012, D. Brown, on behalf of S. Eid)
-	{ IAR_CHF_IBUF, 	0x2F }, // {0x79, 0x2F} CHF_IBUF  Adjust the gm-C filter gain (+/- 6dB)         (21 Dec, 2012, on behalf of S. Soca)
-	{ IAR_CHF_QBUF,		0x2F }, // {0x7A, 0x2F} CHF_QBUF  Adjust the gm-C filter gain (+/- 6dB)         (21 Dec, 2012, on behalf of S. Soca)
-	{ IAR_CHF_IRIN,		0x24 }, // {0x7B, 0x24} CHF_IRIN  Adjust the filter bandwidth (+/- 0.5MHz)      (21 Dec, 2012, on behalf of S. Soca)
-	{ IAR_CHF_QRIN,		0x24 }, // {0x7C, 0x24} CHF_QRIN  Adjust the filter bandwidth (+/- 0.5MHz)      (21 Dec, 2012, on behalf of S. Soca)
-	{ IAR_CHF_IL, 		0x24 }, // {0x7D, 0x24} CHF_IL    Adjust the filter bandwidth (+/- 0.5MHz)      (21 Dec, 2012, on behalf of S. Soca)
-	{ IAR_CHF_QL, 		0x24 }, // {0x7E, 0x24} CHF_QL    Adjust the filter bandwidth (+/- 0.5MHz)      (21 Dec, 2012, on behalf of S. Soca)
-	{ IAR_CHF_CC1, 		0x32 }, // {0x7F, 0x32} CHF_CC1   Adjust the filter center frequency (+/- 1MHz) (21 Dec, 2012, on behalf of S. Soca)
-	{ IAR_CHF_CCL, 		0x1D }, // {0x80, 0x1D} CHF_CCL   Adjust the filter center frequency (+/- 1MHz) (21 Dec, 2012, on behalf of S. Soca)
-	{ IAR_CHF_CC2, 		0x2D }, // {0x81, 0x2D} CHF_CC2   Adjust the filter center frequency (+/- 1MHz) (21 Dec, 2012, on behalf of S. Soca)
-	{ IAR_CHF_IROUT,	0x24 }, // {0x82, 0x24} CHF_IROUT Adjust the filter bandwidth (+/- 0.5MHz)      (21 Dec, 2012, on behalf of S. Soca)
-	{ IAR_CHF_QROUT,	0x24 }, // {0x83, 0x24} CHF_QROUT Adjust the filter bandwidth (+/- 0.5MHz)      (21 Dec, 2012, on behalf of S. Soca)
-	{ IAR_PA_CAL, 		0x28 }, // {0x64, 0x28} PA_CAL_DIS=1  Disabled PA calibration
-	{ IAR_AGC_THR1, 	0x55 }, // {0x52, 0x55} AGC_THR1 RSSI tune up
-	{ IAR_AGC_THR2, 	0x2D }, // {0x53, 0x2D} AGC_THR2 RSSI tune up
-	{ IAR_ATT_RSSI1, 	0x5F }, // {0x66, 0x5F} ATT_RSSI1 tune up
-	{ IAR_ATT_RSSI2, 	0x8F }, // {0x67, 0x8F} ATT_RSSI2 tune up
-	{ IAR_RSSI_OFFSET, 	0x61 }, // {0x68, 0x61} RSSI_OFFSET
-	{ IAR_CHF_PMA_GAIN,	0x03 }, // {0x78, 0x03} CHF_PMAGAIN
-	{ IAR_CCA1_THRESH, 	0x50 }, // {0x22, 0x50} CCA1_THRESH
-	{ IAR_CORR_NVAL, 	0x13 }, // {0x4D, 0x13} CORR_NVAL moved from 0x14 to 0x13 for 0.5 dB improved Rx Sensitivity
-	{ IAR_ACKDELAY, 	0x3D },  // {0x39, 0x3D} ACKDELAY new value targeting a delay of 198us (23 May, 2013, Larry Roshak)
+	{ IAR_MISC_PAD_CTRL,	0x02 },
+	{ IAR_VCO_CTRL1,	0xB3 },
+	{ IAR_VCO_CTRL2, 	0x07 },
+	{ IAR_PA_TUNING, 	0x71 },
+	{ IAR_CHF_IBUF, 	0x2F },
+	{ IAR_CHF_QBUF,		0x2F },
+	{ IAR_CHF_IRIN,		0x24 },
+	{ IAR_CHF_QRIN,		0x24 },
+	{ IAR_CHF_IL, 		0x24 },
+	{ IAR_CHF_QL, 		0x24 },
+	{ IAR_CHF_CC1, 		0x32 },
+	{ IAR_CHF_CCL, 		0x1D },
+	{ IAR_CHF_CC2, 		0x2D },
+	{ IAR_CHF_IROUT,	0x24 },
+	{ IAR_CHF_QROUT,	0x24 },
+	{ IAR_PA_CAL, 		0x28 },
+	{ IAR_AGC_THR1, 	0x55 },
+	{ IAR_AGC_THR2, 	0x2D },
+	{ IAR_ATT_RSSI1, 	0x5F },
+	{ IAR_ATT_RSSI2, 	0x8F },
+	{ IAR_RSSI_OFFSET, 	0x61 },
+	{ IAR_CHF_PMA_GAIN,	0x03 },
+	{ IAR_CCA1_THRESH, 	0x50 },
+	{ IAR_CORR_NVAL, 	0x13 },
+	{ IAR_ACKDELAY, 	0x3D },
 };
 
 /* local variables*/
-//#ifdef MCR20A_DEBUGFS
 static u8 data = 0;
 
 /* this structure defines the upper and lower bound for dump registers feature*/
@@ -159,7 +152,6 @@ typedef struct registerLimits_tag {
 	u8 regEnd;
 	u8 bIsRegisterDirect;
 } registerLimits_t;
-
 
 const registerLimits_t darIntervals[] = {
 	{ .regStart = 0x00, .regEnd = 0x26 },
@@ -192,7 +184,7 @@ const registerLimits_t iarIntervals[] = {
 
 //#endif
 
-#define MCR20A_VALID_CHANNELS                 (0x07FFF800)
+#define MCR20A_VALID_CHANNELS (0x07FFF800)
 
 struct mcr20a_platform_data {
 	int rst_gpio;
@@ -257,8 +249,6 @@ mcr20a_dar_writeable(struct device *dev, unsigned int reg) {
 	case DAR_OVERWRITE_VER:
 	case DAR_CLK_OUT_CTRL:
 	case DAR_PWR_MODES:
-	/* no IAR_INDEX */
-	/* no IAR_DATA */
 		return true;
 	default:
 		return false;
@@ -294,12 +284,12 @@ mcr20a_dar_readable(struct device *dev, unsigned int reg) {
 
 static bool
 mcr20a_dar_volatile(struct device *dev, unsigned int reg) {
-/* can be changed during runtime */
+	/* can be changed during runtime */
 	switch (reg) {
 	case DAR_IRQ_STS1:
 	case DAR_IRQ_STS2:
 	case DAR_IRQ_STS3:
-/* use them in spi_async and regmap so it's volatile */
+	/* use them in spi_async and regmap so it's volatile */
 		return true;
 	default:
 		return false;
@@ -308,7 +298,7 @@ mcr20a_dar_volatile(struct device *dev, unsigned int reg) {
 
 static bool
 mcr20a_dar_precious(struct device *dev, unsigned int reg) {
-/* don't clear irq line on read */
+	/* don't clear irq line on read */
 	switch (reg) {
 	case DAR_IRQ_STS1:
 	case DAR_IRQ_STS2:
@@ -320,18 +310,17 @@ mcr20a_dar_precious(struct device *dev, unsigned int reg) {
 }
 
 static const struct regmap_config mcr20a_dar_regmap = {
-	.name				= "mcr20a_dar",
-	.reg_bits			= 8,
-	.val_bits			= 8,
+	.name			= "mcr20a_dar",
+	.reg_bits		= 8,
+	.val_bits		= 8,
 	.write_flag_mask	= REGISTER_ACCESS | REGISTER_WRITE,
 	.read_flag_mask 	= REGISTER_ACCESS | REGISTER_READ,
 	.cache_type 		= REGCACHE_RBTREE,
-//	.max_register		= MCR20A_DAR_NUMREGS,
 	.writeable_reg		= mcr20a_dar_writeable,
 	.readable_reg		= mcr20a_dar_readable,
 	.volatile_reg		= mcr20a_dar_volatile,
 	.precious_reg		= mcr20a_dar_precious,
-	.fast_io			= true,
+	.fast_io		= true,
 };
 
 static bool
@@ -376,11 +365,6 @@ mcr20a_iar_writeable(struct device *dev, unsigned int reg) {
 	case IAR_CCA2_CORR_PEAKS:
 	case IAR_CCA2_CORR_THRESH:
 	case IAR_TMR_PRESCALE:
-//	case IAR_GPIO_DATA:
-//	case IAR_GPIO_DIR:
-//	case IAR_GPIO_PUL_EN:
-//	case IAR_GPIO_PUL_SEL:
-//	case IAR_GPIO_DS:
 	case IAR_ANT_PAD_CTRL:
 	case IAR_MISC_PAD_CTRL:
 	case IAR_BSM_CTRL:
@@ -424,11 +408,11 @@ static bool
 mcr20a_iar_readable(struct device *dev, unsigned int reg) {
 	bool rc;
 
-/* all writeable are also readable */
+	/* all writeable are also readable */
 	rc = mcr20a_iar_writeable(dev, reg);
 	if (rc) return rc;
 
-/* readonly regs */
+	/* readonly regs */
 	switch (reg) {
 	case IAR_PART_ID:
 	case IAR_DUAL_PAN_STS:
@@ -464,7 +448,6 @@ static const struct regmap_config mcr20a_iar_regmap = {
 	.write_flag_mask	= REGISTER_ACCESS | REGISTER_WRITE | IAR_INDEX,
 	.read_flag_mask 	= REGISTER_ACCESS | REGISTER_READ  | IAR_INDEX,
 	.cache_type 		= REGCACHE_RBTREE,
-	.max_register 		= MCR20A_IAR_NUMREGS,
 	.writeable_reg 		= mcr20a_iar_writeable,
 	.readable_reg 		= mcr20a_iar_readable,
 	.volatile_reg 		= mcr20a_iar_volatile,
@@ -479,14 +462,11 @@ struct mcr20a_local {
 	struct regmap *regmap_dar;
 	struct regmap *regmap_iar;
 
-	bool hw_registered;
-	u8 *buf;            /* SPI TX/Rx data buffer */
+	u8 *buf;
 
 	atomic_t mcr20a_is_awake;
 
-	bool is_tx; 			/* Flag for sync b/w Tx and Rx */
-//	bool is_tx_start;
-//	bool is_rx;
+	bool is_tx;
 
 	/* for writing tx buffer */
 	struct spi_message tx_buf_msg;
@@ -500,7 +480,7 @@ struct mcr20a_local {
 	struct spi_transfer tx_xfer_buf;
 	struct sk_buff *tx_skb;
 
-	/* for protect/unprotect/read length rxfifo */
+	/* for read length rxfifo */
 	struct spi_message reg_msg;
 	u8 reg_cmd[1];
 	u8 reg_data[MCR20A_IRQSTS_NUM];
@@ -528,16 +508,18 @@ static void
 mcr20a_write_tx_buf_complete(void *context) {
 	struct mcr20a_local *lp = context;
 	int ret;
-//	__le16 fcf = ieee802154_get_fc_from_skb(lp->tx_skb);
-
+	__le16 fcf = ieee802154_get_fc_from_skb(lp->tx_skb);
+	
 	dev_dbg(printdev(lp), "write_tx_buf_complete()\n");
 
-//	if (ieee802154_is_ackreq(fcf)) {
-//		regmap_update_bits(lp->regmap_dar, DAR_PHY_CTRL1, DAR_PHY_CTRL1_RXACKRQD, DAR_PHY_CTRL1_RXACKRQD);
-//		dev_info(printdev(lp), "tx requires ack\n");
-//	} else {
-//		regmap_update_bits(lp->regmap_dar, DAR_PHY_CTRL1, DAR_PHY_CTRL1_RXACKRQD, 0x0);
-//	}
+	if (ieee802154_is_ackreq(fcf)) {
+		regmap_update_bits(lp->regmap_dar, DAR_PHY_CTRL1,
+			DAR_PHY_CTRL1_RXACKRQD, DAR_PHY_CTRL1_RXACKRQD);
+		dev_info(printdev(lp), "tx requires ack\n");
+	} else {
+		regmap_update_bits(lp->regmap_dar, DAR_PHY_CTRL1,
+			DAR_PHY_CTRL1_RXACKRQD, 0x0);
+	}
 	
 	lp->reg_msg.complete	= NULL;
 	lp->reg_cmd[0]		= MCR20A_WRITE_REG(DAR_PHY_CTRL1);
@@ -560,7 +542,7 @@ mcr20a_xmit(struct ieee802154_hw *hw, struct sk_buff *skb) {
 
 #ifdef DEBUG
 	print_hex_dump(KERN_INFO, "mcr20a write: ", DUMP_PREFIX_OFFSET, 16, 1,
-				   skb->data, skb->len, 0);
+		skb->data, skb->len, 0);
 #endif
 
 	lp->is_tx = 1;
@@ -571,10 +553,6 @@ mcr20a_xmit(struct ieee802154_hw *hw, struct sk_buff *skb) {
 	lp->reg_xfer_data.len	= 1;
 
 	return spi_async(lp->spi, &lp->reg_msg);
-	
-//	regmap_update_bits(lp->regmap_dar, DAR_PHY_CTRL1, DAR_PHY_CTRL1_XCVSEQ_MASK, MCR20A_XCVSEQ_IDLE);
-
-//	return 0;
 }
 
 static int
@@ -634,16 +612,13 @@ mcr20a_set_channel(struct ieee802154_hw *hw, u8 page, u8 channel) {
 
 	dev_info(printdev(lp), "--> mcr20a_set_channell(): %d\n", channel);
 
-	BUG_ON(page != 0);
-	BUG_ON(channel < MCR20A_MIN_CHANNEL);
-	BUG_ON(channel > MCR20A_MAX_CHANNEL);
-
 	/* freqency = ((PLL_INT+64) + (PLL_FRAC/65536)) * 32 MHz */
 	ret = regmap_write(lp->regmap_dar, DAR_PLL_INT0, PLL_INT[channel - 11]);
 	if (ret) return ret;
 	ret = regmap_write(lp->regmap_dar, DAR_PLL_FRAC0_LSB, 0x00);
 	if (ret) return ret;
-	ret = regmap_write(lp->regmap_dar, DAR_PLL_FRAC0_MSB, PLL_FRAC[channel - 11]);
+	ret = regmap_write(lp->regmap_dar, DAR_PLL_FRAC0_MSB,
+		PLL_FRAC[channel - 11]);
 	if (ret) return ret;
 
 	return 0;
@@ -658,7 +633,8 @@ mcr20a_start(struct ieee802154_hw *hw) {
 
 	/* No slotted operation */
 	dev_info(printdev(lp), "no slotted operation\n");
-	ret = regmap_update_bits(lp->regmap_dar, DAR_PHY_CTRL1, DAR_PHY_CTRL1_SLOTTED, 0x0);
+	ret = regmap_update_bits(lp->regmap_dar, DAR_PHY_CTRL1,
+		DAR_PHY_CTRL1_SLOTTED, 0x0);
 
 	/* enable irq */
 	enable_irq(lp->spi->irq);
@@ -1041,16 +1017,17 @@ static void mcr20a_debugfs_remove(void) {
 static int
 mcr20a_request_rx(struct mcr20a_local *lp) {
 
-	dev_info(printdev(lp), "mcr20a_request_rx() \n");
+	dev_info(printdev(lp), "-->%s \n", __func__);
 
-	dev_dbg(printdev(lp), "Set SEQ to IDLE\n");
+//	dev_dbg(printdev(lp), "Set SEQ to IDLE\n");
 
-	regmap_update_bits(lp->regmap_dar, DAR_PHY_CTRL1, DAR_PHY_CTRL1_XCVSEQ_MASK, MCR20A_XCVSEQ_IDLE);
+//	regmap_update_bits(lp->regmap_dar, DAR_PHY_CTRL1, DAR_PHY_CTRL1_XCVSEQ_MASK, MCR20A_XCVSEQ_IDLE);
 
 	dev_dbg(printdev(lp), "Set SEQ to RX\n");
 
 	/* Start the RX sequence */
-	regmap_update_bits(lp->regmap_dar, DAR_PHY_CTRL1, DAR_PHY_CTRL1_XCVSEQ_MASK, MCR20A_XCVSEQ_RX);
+	regmap_update_bits(lp->regmap_dar, DAR_PHY_CTRL1,
+		DAR_PHY_CTRL1_XCVSEQ_MASK, MCR20A_XCVSEQ_RX);
 
 	return 0;
 }
@@ -1061,7 +1038,7 @@ mcr20a_handle_rx_read_buf_complete(void *context) {
 	u8 len = lp->reg_data[0] & DAR_RX_FRAME_LENGTH_MASK;
 	struct sk_buff *skb;
 
-	dev_info(printdev(lp), "--> mcr20a_handle_rx_read_buf_complete() \n");
+	dev_info(printdev(lp), "-->%s \n", __func__);
 	
 	mcr20a_request_rx(lp);
 	
@@ -1093,7 +1070,8 @@ mcr20a_handle_rx_read_len_complete(void *context) {
 	struct mcr20a_local *lp = context;
 	u8 len;
 	int ret;
-	dev_info(printdev(lp), "mcr20a_handle_rx_read_len_complete() \n");
+	
+	dev_info(printdev(lp), "-->%s \n", __func__);
 
 	/* get the length of received frame */
 	len = lp->reg_data[0] & DAR_RX_FRAME_LENGTH_MASK;
@@ -1113,10 +1091,10 @@ mcr20a_handle_rx_read_len_complete(void *context) {
 static int
 mcr20a_handle_rx(struct mcr20a_local *lp) {
 
-	dev_info(printdev(lp), "mcr20a_handle_rx() \n");
+	dev_info(printdev(lp), "-->%s \n", __func__); 
 	
-	lp->reg_msg.complete 	= mcr20a_handle_rx_read_len_complete;
-	lp->reg_cmd[0] 			= MCR20A_READ_REG(DAR_RX_FRM_LEN);
+	lp->reg_msg.complete = mcr20a_handle_rx_read_len_complete;
+	lp->reg_cmd[0] = MCR20A_READ_REG(DAR_RX_FRM_LEN);
 	lp->reg_xfer_data.len	= 1;
 
 	return spi_async(lp->spi, &lp->reg_msg);
@@ -1124,7 +1102,7 @@ mcr20a_handle_rx(struct mcr20a_local *lp) {
 
 static int
 mcr20a_handle_tx_complete(struct mcr20a_local *lp) {
-	dev_info(printdev(lp), "mcr20a_handle_tx_complete() \n");
+	dev_info(printdev(lp), "-->%s \n", __func__);
 	
 	ieee802154_xmit_complete(lp->hw, lp->tx_skb, false);
 
@@ -1134,7 +1112,8 @@ mcr20a_handle_tx_complete(struct mcr20a_local *lp) {
 static int
 mcr20a_handle_tx(struct mcr20a_local *lp) {
 	int ret;
-	dev_info(printdev(lp), "mcr20a_handle_tx_complete() \n");
+	dev_info(printdev(lp), "-->%s \n", __func__);
+	
 	/* write tx buffer */
 	lp->tx_header[0] 	= MCR20A_BURST_WRITE_PACKET_BUF;
 	lp->tx_len[0] 		= lp->tx_skb->len + 2;	/* add 2 bytes of FCS */
@@ -1155,11 +1134,10 @@ mcr20a_irq_clean_complete(void *context) {
 	struct mcr20a_local *lp = context;
 	u8 seq_state = lp->irq_data[DAR_IRQ_STS1] & DAR_PHY_CTRL1_XCVSEQ_MASK;
 
-	dev_info(printdev(lp), "mcr20a_irq_clean_complete() \n");
+	dev_info(printdev(lp), "--> %s\n", __func__);
 	
 	enable_irq(lp->spi->irq);
 
-//	dev_info(printdev(lp), "mcr20a_irq_status_complete() \n");
 	dev_info(printdev(lp), "IRQ STA1 (%02x) STA2 (%02x) \n", lp->irq_data[DAR_IRQ_STS1], lp->irq_data[DAR_IRQ_STS2]);
 
 	switch (seq_state) {
@@ -1191,7 +1169,7 @@ mcr20a_irq_clean_complete(void *context) {
 			return;
 		} else {
 			/* rx is starting */
-			dev_info(printdev(lp), "RX is done\n");
+			dev_info(printdev(lp), "RX is starting\n");
 			mcr20a_handle_rx(lp);
 			return;
 		}
@@ -1212,19 +1190,20 @@ mcr20a_irq_clean_complete(void *context) {
 }
 
 
-static void
-mcr20a_irq_status_complete(void *context) {
+static void mcr20a_irq_status_complete(void *context) {
 	int ret;
 	struct mcr20a_local *lp = context;
-//	u8 seq_state = lp->irq_data[DAR_IRQ_STS1] & DAR_PHY_CTRL1_XCVSEQ_MASK;
+	
+	dev_info(printdev(lp), "--> %s\n", __func__);
+	
 
-//	enable_irq(lp->spi->irq);
+	regmap_update_bits(lp->regmap_dar, DAR_PHY_CTRL1,
+		DAR_PHY_CTRL1_XCVSEQ_MASK, MCR20A_XCVSEQ_IDLE);
 
-	dev_info(printdev(lp), "mcr20a_irq_status_complete() \n");
+	
 	lp->reg_msg.complete 	= mcr20a_irq_clean_complete;
 	lp->reg_cmd[0] 		= MCR20A_WRITE_REG(DAR_IRQ_STS1);
 	memcpy(lp->reg_data, lp->irq_data, MCR20A_IRQSTS_NUM);
-//	lp->reg_data 		= lp->irq_data;
 	lp->reg_xfer_data.len	= MCR20A_IRQSTS_NUM;
 
 	ret = spi_async(lp->spi, &lp->reg_msg);
@@ -1241,8 +1220,7 @@ static irqreturn_t mcr20a_irq_isr(int irq, void *data) {
 	disable_irq_nosync(irq);
 
 	lp->irq_header[0] = MCR20A_READ_REG(DAR_IRQ_STS1);
-	/* Read the interrupt status */
-	printk(KERN_ERR "irq received!!\n");
+	/* read IRQSTSx */
 	ret = spi_async(lp->spi, &lp->irq_msg);
 	if (ret) {
 		enable_irq(irq);
@@ -1252,57 +1230,42 @@ static irqreturn_t mcr20a_irq_isr(int irq, void *data) {
 	return IRQ_HANDLED;
 }
 
-/**
-* mcr20a_get_platform_data() - Populate a mcr20a_platform_data object
-* @spi_device:  Pointer to cmcr20a spi device object to get data for
-* @pdata:       Pointer to cmcr20a_platform_data object to populate
-*
-* Return: 0 or linux error code
-*/
 static int mcr20a_get_platform_data(struct spi_device *spi,
-									struct mcr20a_platform_data *pdata) {
+		struct mcr20a_platform_data *pdata) {
 	int ret = 0;
-	dev_info(&spi->dev, "--> mcr20a_get_platform_data() \n");
 
 	if (spi->dev.of_node == NULL) return -EINVAL;
 
-	pdata->rst_gpio 	= of_get_named_gpio(spi->dev.of_node, "rst_b-gpio", 	0);
+	pdata->rst_gpio = of_get_named_gpio(spi->dev.of_node, "rst_b-gpio", 0);
 	dev_info(&spi->dev, "rst_b-gpio: %d \n", pdata->rst_gpio);
 
-//	pdata->clk_out_gpio = of_get_named_gpio(spi->dev.of_node, "clk_out-gpio", 	0);
 	return ret;
 }
 
-/**
-* mcr20a_hw_setup() - Populate the ieee802154_hw phy attributes with the
-*                     mcr20a's defaults
-* @mcr20a_local:  Pointer to ieee802154_hw to populate
-*
-*/
-static void
-mcr20a_hw_setup(struct mcr20a_local *lp) {
-/* Support channels 11-26 */
+static void mcr20a_hw_setup(struct mcr20a_local *lp) {
 	u8 i;
+	struct ieee802154_hw *hw = lp->hw;
+	struct wpan_phy *phy = lp->hw->phy;
+	
+	dev_info(printdev(lp), "--> %s\n", __func__); 
 
-	dev_info(printdev(lp), "--> mcr20a_hw_setup()");
+	phy->symbol_duration = 16;
+	phy->lifs_period = 40;
+	phy->sifs_period = 12;
 
-	lp->hw->phy->symbol_duration = 16;
-	lp->hw->phy->lifs_period = 40;
-	lp->hw->phy->sifs_period = 12;
-
-	lp->hw->flags = IEEE802154_HW_TX_OMIT_CKSUM |
+	hw->flags = IEEE802154_HW_TX_OMIT_CKSUM |
 			IEEE802154_HW_AFILT |
 			IEEE802154_HW_PROMISCUOUS;
 
-	lp->hw->phy->flags = WPAN_PHY_FLAG_TXPOWER |
+	phy->flags = WPAN_PHY_FLAG_TXPOWER |
 		WPAN_PHY_FLAG_CCA_ED_LEVEL |
 		WPAN_PHY_FLAG_CCA_MODE;
 
-	lp->hw->phy->supported.lbt = NL802154_SUPPORTED_BOOL_BOTH;
+	phy->supported.lbt = NL802154_SUPPORTED_BOOL_BOTH;
 
-	lp->hw->phy->supported.cca_modes = BIT(NL802154_CCA_ENERGY) |
+	phy->supported.cca_modes = BIT(NL802154_CCA_ENERGY) |
 		BIT(NL802154_CCA_CARRIER) | BIT(NL802154_CCA_ENERGY_CARRIER);
-	lp->hw->phy->supported.cca_opts = BIT(NL802154_CCA_OPT_ENERGY_CARRIER_AND) |
+	phy->supported.cca_opts = BIT(NL802154_CCA_OPT_ENERGY_CARRIER_AND) |
 		BIT(NL802154_CCA_OPT_ENERGY_CARRIER_OR);
 
 	/* inititial cca_ed_levels */
@@ -1310,24 +1273,27 @@ mcr20a_hw_setup(struct mcr20a_local *lp) {
 		mcr20a_ed_levels[i] =  -i * 100;
 	}
 
-	lp->hw->phy->supported.cca_ed_levels 		= mcr20a_ed_levels;
-	lp->hw->phy->supported.cca_ed_levels_size 	= ARRAY_SIZE(mcr20a_ed_levels);
+	phy->supported.cca_ed_levels = mcr20a_ed_levels;
+	phy->supported.cca_ed_levels_size = ARRAY_SIZE(mcr20a_ed_levels);
 
-	lp->hw->phy->cca.mode = NL802154_CCA_ENERGY;
+	phy->cca.mode = NL802154_CCA_ENERGY;
 
-	lp->hw->phy->supported.channels[0] = 0x7FFF800;
-	lp->hw->phy->current_page 				= 0;
+	phy->supported.channels[0] = 0x7FFF800;
+	phy->current_page = 0;
 	/* MCR20A reset defualt value */
-	lp->hw->phy->current_channel 			= 20;
-	lp->hw->phy->symbol_duration 			= 16;
-	lp->hw->phy->supported.tx_powers 		= mcr20a_powers;
-	lp->hw->phy->supported.tx_powers_size 	= ARRAY_SIZE(mcr20a_powers);
-	lp->hw->phy->cca_ed_level 				= lp->hw->phy->supported.cca_ed_levels[75];
-	lp->hw->phy->transmit_power 			= lp->hw->phy->supported.tx_powers[0x0F];
+	phy->current_channel = 20;
+	phy->symbol_duration = 16;
+	phy->supported.tx_powers = mcr20a_powers;
+	phy->supported.tx_powers_size = ARRAY_SIZE(mcr20a_powers);
+	phy->cca_ed_level = phy->supported.cca_ed_levels[75];
+	phy->transmit_power = phy->supported.tx_powers[0x0F];
 }
 
 static void
 mcr20a_setup_tx_spi_messages(struct mcr20a_local *lp) {
+	
+	dev_info(printdev(lp), "--> %s\n", __func__);
+	
 	spi_message_init(&lp->tx_buf_msg);
 	lp->tx_buf_msg.context = lp;
 	lp->tx_buf_msg.complete = mcr20a_write_tx_buf_complete;
@@ -1345,6 +1311,9 @@ mcr20a_setup_tx_spi_messages(struct mcr20a_local *lp) {
 
 static void
 mcr20a_setup_rx_spi_messages(struct mcr20a_local *lp) {
+	
+	dev_info(printdev(lp), "--> %s\n", __func__); 
+	
 	spi_message_init(&lp->reg_msg);
 	lp->reg_msg.context = lp;
 
@@ -1352,7 +1321,6 @@ mcr20a_setup_rx_spi_messages(struct mcr20a_local *lp) {
 	lp->reg_xfer_cmd.tx_buf = lp->reg_cmd;
 	lp->reg_xfer_cmd.rx_buf = lp->reg_cmd;
 
-//  lp->reg_xfer_data.len = 1;
 	lp->reg_xfer_data.rx_buf = lp->reg_data;
 	lp->reg_xfer_data.tx_buf = lp->reg_data;
 	
@@ -1378,6 +1346,9 @@ mcr20a_setup_rx_spi_messages(struct mcr20a_local *lp) {
 
 static void
 mcr20a_setup_irq_spi_messages(struct mcr20a_local *lp) {
+	
+	dev_info(printdev(lp), "--> %s\n", __func__);
+	
 	spi_message_init(&lp->irq_msg);
 	lp->irq_msg.context		= lp;
 	lp->irq_msg.complete	= mcr20a_irq_status_complete;
@@ -1404,66 +1375,43 @@ mcr20a_phy_init(struct mcr20a_local *lp) {
 	unsigned int phyReg = 0;
 	int ret;
 
-	dev_info(printdev(lp), "--> mcr20a_phy_init()\n");
+	dev_info(printdev(lp), "--> %s\n", __func__); 
 
 	/* Disable Tristate on COCO MISO for SPI reads */
 	ret = regmap_write(lp->regmap_iar, IAR_MISC_PAD_CTRL, 0x02);
 	if (ret) goto err_ret;
 
-	/* PHY_CTRL4 unmask global TRX interrupts, enable 16 bit mode for TC2 - TC2 prime EN */
-//  ret = regmap_write(lp->regmap_dar, DAR_PHY_CTRL4, DAR_PHY_CTRL4_TC2PRIME_EN | (MCR20A_CCA_MODE1 << DAR_PHY_CTRL4_CCATYPE_SHIFT));
-//  if (ret) goto err_ret;
-
 	/* Clear all PP IRQ bits in IRQSTS1 to avoid unexpected interrupts immediately after init */
-	ret = regmap_write(lp->regmap_dar, DAR_IRQ_STS1, DAR_IRQSTS1_PLL_UNLOCK_IRQ |\
-						   DAR_IRQSTS1_FILTERFAIL_IRQ |\
-						   DAR_IRQSTS1_RXWTRMRKIRQ |\
-						   DAR_IRQSTS1_CCAIRQ |\
-						   DAR_IRQSTS1_RXIRQ |\
-						   DAR_IRQSTS1_TXIRQ |\
-						   DAR_IRQSTS1_SEQIRQ);
+	ret = regmap_write(lp->regmap_dar, DAR_IRQ_STS1, 0xEF);
 	if (ret) goto err_ret;
 
 	/* Clear all PP IRQ bits in IRQSTS2 */
-	ret = regmap_write(lp->regmap_dar, DAR_IRQ_STS2, DAR_IRQSTS2_ASM_IRQ |\
-						   DAR_IRQSTS2_PB_ERR_IRQ |\
-						   DAR_IRQSTS2_WAKE_IRQ);
+	ret = regmap_write(lp->regmap_dar, DAR_IRQ_STS2,
+		DAR_IRQSTS2_ASM_IRQ | DAR_IRQSTS2_PB_ERR_IRQ | \
+		DAR_IRQSTS2_WAKE_IRQ);
 	if (ret) goto err_ret;
 
 	/* Disable all timer interrupts */
-	ret = regmap_write(lp->regmap_dar, DAR_IRQ_STS3, DAR_IRQSTS3_TMR4MSK |\
-						   DAR_IRQSTS3_TMR3MSK |\
-						   DAR_IRQSTS3_TMR2MSK |\
-						   DAR_IRQSTS3_TMR1MSK |\
-						   DAR_IRQSTS3_TMR4IRQ |\
-						   DAR_IRQSTS3_TMR3IRQ |\
-						   DAR_IRQSTS3_TMR2IRQ |\
-						   DAR_IRQSTS3_TMR1IRQ);
+	ret = regmap_write(lp->regmap_dar, DAR_IRQ_STS3, 0xFF);
 	if (ret) goto err_ret;
 
 	/*  PHY_CTRL1 : default HW settings + AUTOACK enabled */
-	ret = regmap_update_bits(lp->regmap_dar, DAR_PHY_CTRL1, DAR_PHY_CTRL1_AUTOACK, DAR_PHY_CTRL1_AUTOACK);
+	ret = regmap_update_bits(lp->regmap_dar, DAR_PHY_CTRL1,
+		DAR_PHY_CTRL1_AUTOACK, DAR_PHY_CTRL1_AUTOACK);
 
 	/*  PHY_CTRL2 : disable all interrupts */
-	ret = regmap_write(lp->regmap_dar, DAR_PHY_CTRL2, DAR_PHY_CTRL2_CRC_MSK |\
-						   DAR_PHY_CTRL2_PLL_UNLOCK_MSK |\
-						   DAR_PHY_CTRL2_FILTERFAIL_MSK |\
-						   DAR_PHY_CTRL2_RX_WMRK_MSK |\
-						   DAR_PHY_CTRL2_CCAMSK |\
-						   DAR_PHY_CTRL2_RXMSK |\
-						   DAR_PHY_CTRL2_TXMSK |\
-						   DAR_PHY_CTRL2_SEQMSK);
+	ret = regmap_write(lp->regmap_dar, DAR_PHY_CTRL2, 0xFF);
 	if (ret) goto err_ret;
 
 	/* PHY_CTRL3 : disable all timers and remaining interrupts */
-	ret = regmap_write(lp->regmap_dar, DAR_PHY_CTRL3, DAR_PHY_CTRL3_ASM_MSK |\
-						   DAR_PHY_CTRL3_PB_ERR_MSK |\
-						   DAR_PHY_CTRL3_WAKE_MSK);
+	ret = regmap_write(lp->regmap_dar, DAR_PHY_CTRL3,
+		DAR_PHY_CTRL3_ASM_MSK | DAR_PHY_CTRL3_PB_ERR_MSK |\
+		DAR_PHY_CTRL3_WAKE_MSK);
 	if (ret) goto err_ret;
 
 	/* SRC_CTRL : enable Acknowledge Frame Pending and Source Address Matching Enable */
 	ret = regmap_write(lp->regmap_dar, DAR_SRC_CTRL, DAR_SRC_CTRL_ACK_FRM_PND |\
-						   (DAR_SRC_CTRL_INDEX << DAR_SRC_CTRL_INDEX_Shift_c));
+						   (DAR_SRC_CTRL_INDEX << DAR_SRC_CTRL_INDEX_SHIFT));
 	if (ret) goto err_ret;
 
 	/*  RX_FRAME_FILTER */
@@ -1475,15 +1423,18 @@ mcr20a_phy_init(struct mcr20a_local *lp) {
 	if (ret) goto err_ret;
 
 	/* Overwrites direct registers  */
-	dev_info(printdev(lp), "Overwrites version: 0x%02x \n", MCR20A_OVERWRITE_VERSION);
-	ret = regmap_write(lp->regmap_dar, DAR_OVERWRITE_VER, MCR20A_OVERWRITE_VERSION);
+	dev_info(printdev(lp), "Overwrites version: 0x%02x \n",
+		MCR20A_OVERWRITE_VERSION);
+	ret = regmap_write(lp->regmap_dar, DAR_OVERWRITE_VER,
+		MCR20A_OVERWRITE_VERSION);
 	if (ret) {
 		goto err_ret;
 	}
 	
 	/* Overwrites indirect registers  */
 	dev_info(printdev(lp), "DAR overwrites\n");
-	ret = regmap_multi_reg_write(lp->regmap_iar, mar20a_iar_overwrites, ARRAY_SIZE(mar20a_iar_overwrites));
+	ret = regmap_multi_reg_write(lp->regmap_iar, mar20a_iar_overwrites,
+		ARRAY_SIZE(mar20a_iar_overwrites));
 	if (ret) {
 		goto err_ret;
 	}
@@ -1491,7 +1442,7 @@ mcr20a_phy_init(struct mcr20a_local *lp) {
 	/* Clear HW indirect queue */
 	dev_info(printdev(lp), "Clear HW indirect queue\n");
 	for (index = 0; index < MCR20A_PHY_INDIRECT_QUEUE_SIZE; index++) {
-		phyReg = (u8)(((index & DAR_SRC_CTRL_INDEX) << DAR_SRC_CTRL_INDEX_Shift_c)
+		phyReg = (u8)(((index & DAR_SRC_CTRL_INDEX) << DAR_SRC_CTRL_INDEX_SHIFT)
 					  | (DAR_SRC_CTRL_SRCADDR_EN)
 					  | (DAR_SRC_CTRL_INDEX_DISABLE));
 		ret = regmap_write(lp->regmap_dar, DAR_SRC_CTRL, phyReg);
@@ -1516,7 +1467,7 @@ mcr20a_phy_init(struct mcr20a_local *lp) {
 	ret = regmap_write(lp->regmap_iar, IAR_CCA1_THRESH, 0x4B);
 	if (ret) goto err_ret;
 
-	/* Set prescaller to obtain 1 symbol (16us) timebase */
+	/* set prescaller to obtain 1 symbol (16us) timebase */
 	dev_info(printdev(lp), "Set prescaller to obtain 1 symbol (16us) timebase\n");
 	ret = regmap_write(lp->regmap_iar, IAR_TMR_PRESCALE, 0x05);
 	if (ret) goto err_ret;
@@ -1568,7 +1519,7 @@ mcr20a_probe(struct spi_device *spi) {
 	/* init reset gpio */
 	if (gpio_is_valid(pdata->rst_gpio)) {
 		ret = devm_gpio_request_one(&spi->dev, pdata->rst_gpio,
-									GPIOF_OUT_INIT_HIGH, "reset");
+			GPIOF_OUT_INIT_HIGH, "reset");
 		if (ret) return ret;
 	}
 
@@ -1589,8 +1540,8 @@ mcr20a_probe(struct spi_device *spi) {
 	}
 
 	/* init mcr20a local data */
-	lp 	= hw->priv;
-	lp->hw 	= hw;
+	lp = hw->priv;
+	lp->hw = hw;
 	lp->spi = spi;
 	lp->spi->dev.platform_data = pdata;
 	lp->pdata = pdata;
@@ -1600,8 +1551,7 @@ mcr20a_probe(struct spi_device *spi) {
 	ieee802154_random_extended_addr(&hw->phy->perm_extended_addr);
 
 	/* init buf */
-	lp->buf = devm_kzalloc(&spi->dev,
-		SPI_COMMAND_BUFFER, GFP_KERNEL);
+	lp->buf = devm_kzalloc(&spi->dev, SPI_COMMAND_BUFFER, GFP_KERNEL);
 
 	if (!lp->buf)
 		return -ENOMEM;
@@ -1622,12 +1572,10 @@ mcr20a_probe(struct spi_device *spi) {
 	lp->regmap_iar = devm_regmap_init_spi(spi, &mcr20a_iar_regmap);
 	if (IS_ERR(lp->regmap_iar)) {
 		ret = PTR_ERR(lp->regmap_iar);
-		dev_err(&spi->dev, "Failed to allocate iar map: %d\n",
-				ret);
+		dev_err(&spi->dev, "Failed to allocate iar map: %d\n", ret);
 		goto free_dev;
 	}
 
-	dev_info(&spi->dev, "mcr20a ieee802154 setup\n");
 	mcr20a_hw_setup(lp);
 
 	spi_set_drvdata(spi, lp);
@@ -1639,10 +1587,11 @@ mcr20a_probe(struct spi_device *spi) {
 	}
 
 	irq_type = irq_get_trigger_type(spi->irq);
-	if (!irq_type) irq_type = IRQF_TRIGGER_FALLING;
+	if (!irq_type)
+		irq_type = IRQF_TRIGGER_FALLING;
 
 	ret = devm_request_irq(&spi->dev, spi->irq, mcr20a_irq_isr,
-						   irq_type, dev_name(&spi->dev), lp);
+		irq_type, dev_name(&spi->dev), lp);
 	if (ret) {
 		dev_err(&spi->dev, "could not request_irq for mcr20a \n");
 		ret = -ENODEV;
@@ -1652,24 +1601,19 @@ mcr20a_probe(struct spi_device *spi) {
 	/* disable_irq by default and wait for starting hardware */
 	disable_irq(spi->irq);
 
-	dev_info(&spi->dev, "init debugfs\n");
 	ret = mcr20a_debugfs_init(lp);
 	if (ret) goto free_dev;
 
-	dev_info(&spi->dev, "ieee802154_register_hw\n");
 	ret = ieee802154_register_hw(hw);
 	if (ret) {
 		dev_crit(&spi->dev, "ieee802154_register_hw failed\n");
 		goto free_debugfs;
 	}
 
-	lp->hw_registered = true;
-
 	return ret;
 
 free_debugfs:
 	mcr20a_debugfs_remove();
-
 free_dev:
 	ieee802154_free_hw(lp->hw);
 
@@ -1679,14 +1623,11 @@ free_dev:
 static int mcr20a_remove(struct spi_device *spi) {
 	struct mcr20a_local *lp = spi_get_drvdata(spi);
 
-	dev_info(&spi->dev, "--> mcr20a_remove()\n");
+	dev_dbg(&spi->dev, "-->%s\n", __func__);
 
 	ieee802154_unregister_hw(lp->hw);
 	ieee802154_free_hw(lp->hw);
 	mcr20a_debugfs_remove();
-	dev_dbg(&spi->dev, "unregistered mcr20a\n");
-
-	pr_info("mcr20a_remove\n");
 
 	return 0;
 }
