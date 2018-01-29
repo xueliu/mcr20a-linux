@@ -13,7 +13,8 @@ clean:
 	${MAKE} -C ${KERNEL_SOURCE} SUBDIRS=${PWD} clean
 
 else
-    obj-m := mcr20a.o
+	obj-m := mcr20a.o
+	CFLAGS_mcr20a.o := -DDEBUG
 endif
 
 remote_install:
