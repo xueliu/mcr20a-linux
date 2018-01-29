@@ -201,7 +201,6 @@ struct mcr20a_platform_data {
 
 
 /* Type definitions for link configuration of instantiable layers  */
-//const uint8_t MCR20A_PHY_INDIRECT_QUEUE_SIZE = 12;
 #define MCR20A_PHY_INDIRECT_QUEUE_SIZE (12)
 
 static bool
@@ -732,7 +731,7 @@ mcr20a_set_txpower(struct ieee802154_hw *hw, s32 mbm) {
 	struct mcr20a_local *lp = hw->priv;
 	u32 i;
 
-	dev_dbg(&lp->spi->dev, "--> mcr20a_set_txpower:%d\n", mbm);
+	dev_dbg(printdev(lp), " -->%s:%d\n", __func__, mbm); 
 
 	for (i = 0; i < lp->hw->phy->supported.tx_powers_size; i++) {
 		if (lp->hw->phy->supported.tx_powers[i] == mbm)
@@ -745,7 +744,7 @@ mcr20a_set_txpower(struct ieee802154_hw *hw, s32 mbm) {
 static int
 mcr20a_set_lbt(struct ieee802154_hw *hw, bool on) {
 	struct mcr20a_local *lp = hw->priv;
-	dev_dbg(printdev(lp), "--> mcr20a_set_lbt()\n");
+	dev_dbg(printdev(lp), " -->%s\n", __func__);
 	return regmap_update_bits(lp->regmap_dar, DAR_PHY_CTRL1, DAR_PHY_CTRL1_CCABFRTX, on << DAR_PHY_CTRL1_CCABFRTX_SHIFT);
 }
 
@@ -760,7 +759,8 @@ mcr20a_set_cca_mode(struct ieee802154_hw *hw,
 	bool cca_mode_and = false;
 	int ret;
 
-	dev_dbg(printdev(lp), "--> mcr20a_set_cca_mode()\n");
+	dev_dbg(printdev(lp), " -->%s\n", __func__);
+	
 	/* mapping 802.15.4 to driver spec */
 	switch (cca->mode) {
 	case NL802154_CCA_ENERGY:
@@ -806,7 +806,7 @@ mcr20a_set_cca_ed_level(struct ieee802154_hw *hw, s32 mbm) {
 	struct mcr20a_local *lp = hw->priv;
 	u32 i;
 
-	dev_dbg(printdev(lp), "--> mcr20a_set_cca_ed_level()\n");
+	dev_dbg(printdev(lp), " -->%s\n", __func__);
 
 	for (i = 0; i < hw->phy->supported.cca_ed_levels_size; i++) {
 		if (hw->phy->supported.cca_ed_levels[i] == mbm)
@@ -823,7 +823,7 @@ mcr20a_set_promiscuous_mode(struct ieee802154_hw *hw, const bool on) {
 	u8 rxFrameFltReg = 0x0;
 	u8 val;
 
-	dev_dbg(printdev(lp), "--> mcr20a_set_promiscuous_mode(%d)\n", on);
+	dev_dbg(printdev(lp), " -->%s(%d)\n", __func__, on);
 
 	if (on) {
 		/* FRM_VER[1:0] = b00. 00: Any FrameVersion accepted (0,1,2 & 3) */
@@ -1189,15 +1189,14 @@ static void mcr20a_irq_status_complete(void *context) {
 	
 	dev_dbg(printdev(lp), "--> %s\n", __func__);
 	
-
 	regmap_update_bits(lp->regmap_dar, DAR_PHY_CTRL1,
 		DAR_PHY_CTRL1_XCVSEQ_MASK, MCR20A_XCVSEQ_IDLE);
 
 	
-	lp->reg_msg.complete 	= mcr20a_irq_clean_complete;
-	lp->reg_cmd[0] 		= MCR20A_WRITE_REG(DAR_IRQ_STS1);
+	lp->reg_msg.complete = mcr20a_irq_clean_complete;
+	lp->reg_cmd[0] = MCR20A_WRITE_REG(DAR_IRQ_STS1);
 	memcpy(lp->reg_data, lp->irq_data, MCR20A_IRQSTS_NUM);
-	lp->reg_xfer_data.len	= MCR20A_IRQSTS_NUM;
+	lp->reg_xfer_data.len = MCR20A_IRQSTS_NUM;
 
 	ret = spi_async(lp->spi, &lp->reg_msg);
 	
@@ -1261,7 +1260,7 @@ static void mcr20a_hw_setup(struct mcr20a_local *lp) {
 	phy->supported.cca_opts = BIT(NL802154_CCA_OPT_ENERGY_CARRIER_AND) |
 		BIT(NL802154_CCA_OPT_ENERGY_CARRIER_OR);
 
-	/* inititial cca_ed_levels */
+	/* initiating cca_ed_levels */
 	for (i = MCR20A_MAX_CCA_THRESHOLD; i < MCR20A_MIN_CCA_THRESHOLD + 1; ++i) {
 		mcr20a_ed_levels[i] =  -i * 100;
 	}
@@ -1273,7 +1272,7 @@ static void mcr20a_hw_setup(struct mcr20a_local *lp) {
 
 	phy->supported.channels[0] = MCR20A_VALID_CHANNELS;
 	phy->current_page = 0;
-	/* MCR20A reset defualt value */
+	/* MCR20A reset default value */
 	phy->current_channel = 20;
 	phy->symbol_duration = 16;
 	phy->supported.tx_powers = mcr20a_powers;
@@ -1415,9 +1414,10 @@ mcr20a_phy_init(struct mcr20a_local *lp) {
 						   IAR_RX_FRAME_FLT_CMD_FT);
 	if (ret) goto err_ret;
 
+	dev_info(printdev(lp), "overwrites version: 0x%02x \n",
+			 MCR20A_OVERWRITE_VERSION);
+	
 	/* Overwrites direct registers  */
-	dev_dbg(printdev(lp), "Overwrites version: 0x%02x \n",
-		MCR20A_OVERWRITE_VERSION);
 	ret = regmap_write(lp->regmap_dar, DAR_OVERWRITE_VER,
 		MCR20A_OVERWRITE_VERSION);
 	if (ret) {
@@ -1425,7 +1425,6 @@ mcr20a_phy_init(struct mcr20a_local *lp) {
 	}
 	
 	/* Overwrites indirect registers  */
-	dev_dbg(printdev(lp), "DAR overwrites\n");
 	ret = regmap_multi_reg_write(lp->regmap_iar, mar20a_iar_overwrites,
 		ARRAY_SIZE(mar20a_iar_overwrites));
 	if (ret) {
@@ -1433,7 +1432,7 @@ mcr20a_phy_init(struct mcr20a_local *lp) {
 	}
 	
 	/* Clear HW indirect queue */
-	dev_dbg(printdev(lp), "Clear HW indirect queue\n");
+	dev_dbg(printdev(lp), "clear HW indirect queue\n");
 	for (index = 0; index < MCR20A_PHY_INDIRECT_QUEUE_SIZE; index++) {
 		phyReg = (u8)(((index & DAR_SRC_CTRL_INDEX) << DAR_SRC_CTRL_INDEX_SHIFT)
 					  | (DAR_SRC_CTRL_SRCADDR_EN)
@@ -1456,22 +1455,22 @@ mcr20a_phy_init(struct mcr20a_local *lp) {
 	if (ret) goto err_ret;
 
 	/* set CCA threshold to -75 dBm */
-	dev_dbg(printdev(lp), "Set CCA threshold to -75 dBm\n");
+	dev_dbg(printdev(lp), "set CCA threshold to -75 dBm\n");
 	ret = regmap_write(lp->regmap_iar, IAR_CCA1_THRESH, 0x4B);
 	if (ret) goto err_ret;
 
 	/* set prescaller to obtain 1 symbol (16us) timebase */
-	dev_dbg(printdev(lp), "Set prescaller to obtain 1 symbol (16us) timebase\n");
+	dev_dbg(printdev(lp), "set prescaller to obtain 1 symbol (16us) timebase\n");
 	ret = regmap_write(lp->regmap_iar, IAR_TMR_PRESCALE, 0x05);
 	if (ret) goto err_ret;
 
 	/* enable autodoze mode. */
-	dev_dbg(printdev(lp), "Enable autodoze mode\n");
+	dev_dbg(printdev(lp), "enable autodoze mode\n");
 	ret = regmap_update_bits(lp->regmap_dar, DAR_PWR_MODES, DAR_PWR_MODES_AUTODOZE, DAR_PWR_MODES_AUTODOZE);
 	if (ret) goto err_ret;
 
 	/* disable clk_out */
-	dev_dbg(printdev(lp), "Disable clk_out\n");
+	dev_dbg(printdev(lp), "disable clk_out\n");
 	ret = regmap_update_bits(lp->regmap_dar, DAR_CLK_OUT_CTRL, DAR_CLK_OUT_CTRL_EN, 0x0);
 	if (ret) goto err_ret;
 
@@ -1489,7 +1488,7 @@ mcr20a_probe(struct spi_device *spi) {
 	int irq_type;
 	int ret = -ENOMEM;
 
-	dev_dbg(&spi->dev, "-->%s\n", __func__);
+	dev_dbg(&spi->dev, " -->%s\n", __func__);
 
 	if (!spi->irq) {
 		dev_err(&spi->dev, "no IRQ specified\n");
@@ -1616,7 +1615,7 @@ free_dev:
 static int mcr20a_remove(struct spi_device *spi) {
 	struct mcr20a_local *lp = spi_get_drvdata(spi);
 
-	dev_dbg(&spi->dev, "-->%s\n", __func__);
+	dev_dbg(&spi->dev, " -->%s\n", __func__);
 
 	ieee802154_unregister_hw(lp->hw);
 	ieee802154_free_hw(lp->hw);
