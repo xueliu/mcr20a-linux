@@ -50,6 +50,5 @@
 		reset     = <&mcr20a>, "rst_b-gpio:4",
 			<&mcr20a_pins>, "brcm,pins:4";
 		speed     = <&mcr20a>, "spi-max-frequency:0";
-		trim      = <&mcr20a>, "xtal-trim.0";
 	};
 };
