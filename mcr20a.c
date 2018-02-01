@@ -272,6 +272,7 @@ static const struct regmap_config mcr20a_dar_regmap = {
 	.volatile_reg		= mcr20a_dar_volatile,
 	.precious_reg		= mcr20a_dar_precious,
 	.fast_io		= true,
+	.can_multi_write	= true,
 };
 
 static bool
