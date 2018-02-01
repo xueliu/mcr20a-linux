@@ -853,7 +853,7 @@ mcr20a_handle_rx_read_buf_complete(void *context)
 
 	dev_dbg(printdev(lp), "%s\n", __func__);
 
-	mcr20a_request_rx(lp);
+	dev_dbg(printdev(lp), "RX is done\n");
 
 	if (!ieee802154_is_valid_psdu_len(len)) {
 		dev_vdbg(&lp->spi->dev, "corrupted frame received\n");
@@ -874,6 +874,9 @@ mcr20a_handle_rx_read_buf_complete(void *context)
 				   lp->rx_buf, len, 0);
 	pr_info("mcr20a rx: lqi: %02hhx\n", lp->rx_lqi[0]);
 #endif
+
+	/* start RX sequence */
+	mcr20a_request_rx(lp);
 }
 
 static void
@@ -979,17 +982,19 @@ mcr20a_irq_clean_complete(void *context)
 			lp->is_tx = 0;
 			dev_dbg(printdev(lp), "TX is done. Get ACK\n");
 			mcr20a_handle_tx_complete(lp);
+		} else {
+			/* rx is starting */
+			dev_dbg(printdev(lp), "RX is starting\n");
+			mcr20a_handle_rx(lp);
 		}
-		/* rx is starting */
-		dev_dbg(printdev(lp), "RX is starting\n");
-		mcr20a_handle_rx(lp);
 		break;
 	case (0x01):
 		if (lp->is_tx) {
 			dev_dbg(printdev(lp), "TX is starting\n");
 			mcr20a_handle_tx(lp);
+		} else {
+			dev_dbg(printdev(lp), "MCR20A is stop\n");
 		}
-		dev_dbg(printdev(lp), "MCR20A is stop\n");
 		break;
 	}
 }
