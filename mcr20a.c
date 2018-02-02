@@ -330,7 +330,6 @@ mcr20a_iar_writeable(struct device *dev, unsigned int reg)
 	case IAR_ANT_AGC_CTRL:
 	case IAR_AGC_THR1:
 	case IAR_AGC_THR2:
-	case IAR_LPPS_CTRL:
 	case IAR_PA_CAL:
 	case IAR_ATT_RSSI1:
 	case IAR_ATT_RSSI2:
