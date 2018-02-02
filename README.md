@@ -59,7 +59,7 @@ Information about the hardware is specified in the Linux device tree. The device
 [wpan-tools](https://github.com/linux-wpan/wpan-tools)
 
 ## TODO
-- [ ] spi_async
+- [x] spi_async
 - [ ] Dual PAN
 - [ ] TRX with RX ACK
 - [ ] Low-power receive mode (LPPS)
