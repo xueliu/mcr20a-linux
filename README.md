@@ -28,10 +28,6 @@ $ make -C /lib/modules/`uname -r`/build M=$PWD
 ```
 $ make -C /lib/modules/`uname -r`/build M=$PWD modules_install
 ```
-To enable the debugfs interface you must add the CONFIG_IEEE802154_MCR20A_DEBUGFS flag to the module's CFLAGS when building the module, i.e.
-```
-$ make CFLAGS_mcr20a.o:=-DCONFIG_IEEE802154_MCR20A_DEBUGFS=1 -C /lib/modules/`uname -r`/build M=$PWD
-```
 The built module can be found at /lib/modules/\`uname -r\`/extra/**mcr20a** and can be loaded with the command  
 ```
 sudo modprobe mcr20a
