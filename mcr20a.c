@@ -62,7 +62,6 @@ enum {
 	MCR20A_CCA_MODE3
 };
 
-/* MCR20A XCVSEQ */
 enum {
 	MCR20A_XCVSEQ_IDLE	= 0x00,
 	MCR20A_XCVSEQ_RX	= 0x01,
@@ -73,8 +72,8 @@ enum {
 };
 
 /* IEEE-802.15.4 defined constants (2.4 GHz logical channels) */
-#define	MCR20A_MIN_CHANNEL		(11)
-#define	MCR20A_MAX_CHANNEL		(26)
+#define	MCR20A_MIN_CHANNEL	(11)
+#define	MCR20A_MAX_CHANNEL	(26)
 #define	MCR20A_CHANNEL_SPACING	(5)
 
 /* MCR20A CCA Threshold constans */
@@ -681,17 +680,6 @@ mcr20a_set_txpower(struct ieee802154_hw *hw, s32 mbm)
 	return -EINVAL;
 }
 
-static int
-mcr20a_set_lbt(struct ieee802154_hw *hw, bool on)
-{
-	struct mcr20a_local *lp = hw->priv;
-
-	dev_dbg(printdev(lp), "%s\n", __func__);
-	return regmap_update_bits(lp->regmap_dar, DAR_PHY_CTRL1,
-				  DAR_PHY_CTRL1_CCABFRTX,
-				  on << DAR_PHY_CTRL1_CCABFRTX_SHIFT);
-}
-
 #define MCR20A_MAX_ED_LEVELS MCR20A_MIN_CCA_THRESHOLD
 static s32 mcr20a_ed_levels[MCR20A_MAX_ED_LEVELS + 1];
 
@@ -825,7 +813,6 @@ static const struct ieee802154_ops mcr20a_hw_ops = {
 	.stop			= mcr20a_stop,
 	.set_hw_addr_filt	= mcr20a_set_hw_addr_filt,
 	.set_txpower		= mcr20a_set_txpower,
-	.set_lbt		= mcr20a_set_lbt,
 	.set_cca_mode		= mcr20a_set_cca_mode,
 	.set_cca_ed_level	= mcr20a_set_cca_ed_level,
 	.set_promiscuous_mode	= mcr20a_set_promiscuous_mode,
@@ -1068,8 +1055,6 @@ static void mcr20a_hw_setup(struct mcr20a_local *lp)
 		WPAN_PHY_FLAG_CCA_ED_LEVEL |
 		WPAN_PHY_FLAG_CCA_MODE;
 
-	phy->supported.lbt = NL802154_SUPPORTED_BOOL_BOTH;
-
 	phy->supported.cca_modes = BIT(NL802154_CCA_ENERGY) |
 		BIT(NL802154_CCA_CARRIER) | BIT(NL802154_CCA_ENERGY_CARRIER);
 	phy->supported.cca_opts = BIT(NL802154_CCA_OPT_ENERGY_CARRIER_AND) |
@@ -1165,12 +1150,6 @@ mcr20a_setup_irq_spi_messages(struct mcr20a_local *lp)
 	spi_message_add_tail(&lp->irq_xfer_data, &lp->irq_msg);
 }
 
-/**
- * mcr20a_phy_init() - Initialize the 802.15.4 Radio registers
- * @mcr20a_local:  Pointer to mcr20a_local structure
- *
- * Return: 0 or linux error code
- */
 static int
 mcr20a_phy_init(struct mcr20a_local *lp)
 {
@@ -1479,4 +1458,3 @@ module_spi_driver(mcr20a_driver);
 MODULE_DESCRIPTION("MCR20A Transceiver Driver");
 MODULE_LICENSE("GPL v2");
 MODULE_AUTHOR("Xue Liu <liuxuenetmail@gmail>");
-MODULE_VERSION("0.1");
