@@ -482,10 +482,8 @@ mcr20a_xmit(struct ieee802154_hw *hw, struct sk_buff *skb)
 
 	lp->tx_skb = skb;
 
-#ifdef DEBUG
-	print_hex_dump(KERN_INFO, "mcr20a write: ", DUMP_PREFIX_OFFSET, 16, 1,
-		       skb->data, skb->len, 0);
-#endif
+	print_hex_dump_debug("mcr20a tx: ", DUMP_PREFIX_OFFSET, 16, 1,
+			     skb->data, skb->len, 0);
 
 	lp->is_tx = 1;
 
@@ -500,48 +498,8 @@ mcr20a_xmit(struct ieee802154_hw *hw, struct sk_buff *skb)
 static int
 mcr20a_ed(struct ieee802154_hw *hw, u8 *level)
 {
-	struct mcr20a_local *lp = hw->priv;
-	unsigned int val = 0;
-	u8 energy_level;
-	int ret;
-
-	dev_dbg(printdev(lp), "%s\n", __func__);
-
-	ret = regmap_read(lp->regmap_dar, DAR_PHY_CTRL1, &val);
-	if (0x0 == (val & DAR_PHY_CTRL1_XCVSEQ_MASK)) {
-		/* Change CCA Type to 00 -  Energy Detect */
-		ret = regmap_write(lp->regmap_dar, DAR_PHY_CTRL4, 0x0);
-		/* Perform ED */
-		ret = regmap_update_bits(lp->regmap_dar, DAR_PHY_CTRL1,
-					 DAR_PHY_CTRL1_XCVSEQ_MASK,
-					 MCR20A_XCVSEQ_CCA);
-		val = 0;
-		while ((DAR_IRQSTS1_CCAIRQ & val) != DAR_IRQSTS1_CCAIRQ)
-			ret = regmap_read(lp->regmap_dar, DAR_IRQ_STS1, &val);
-		/* the energy level scaled in 0x00 - 0xFF */
-		ret = regmap_read(lp->regmap_dar, DAR_CCA1_ED_FNL, &val);
-		energy_level = (u8)val;
-
-		if (energy_level >= 90) {
-		/* ED value is below minimum. Return 0x00. */
-			energy_level = 0x00;
-		} else if (energy_level <= 26) {
-		/* ED value is above maximum. Return 0xFF. */
-			energy_level = 0xFF;
-		} else {
-		/* Energy level (-90 dBm to -26 dBm ) varies form 0 to 64 */
-			energy_level = (90 - energy_level);
-			energy_level <<= 2;
-		}
-
-		*level = energy_level;
-	} else {
-		/* switch to IDLE at first */
-		regmap_update_bits(lp->regmap_dar, DAR_PHY_CTRL1,
-				   DAR_PHY_CTRL1_XCVSEQ_MASK,
-				   MCR20A_XCVSEQ_IDLE);
-	}
-
+	WARN_ON(!level);
+	*level = 0xbe;
 	return 0;
 }
 
@@ -551,7 +509,7 @@ mcr20a_set_channel(struct ieee802154_hw *hw, u8 page, u8 channel)
 	struct mcr20a_local *lp = hw->priv;
 	int ret;
 
-	dev_dbg(printdev(lp), "mcr20a_set_channell(): %d\n", channel);
+	dev_dbg(printdev(lp), "%s\n", __func__);
 
 	/* freqency = ((PLL_INT+64) + (PLL_FRAC/65536)) * 32 MHz */
 	ret = regmap_write(lp->regmap_dar, DAR_PLL_INT0, PLL_INT[channel - 11]);
@@ -855,11 +813,9 @@ mcr20a_handle_rx_read_buf_complete(void *context)
 	memcpy(skb_put(skb, len), lp->rx_buf, len);
 	ieee802154_rx_irqsafe(lp->hw, skb, lp->rx_lqi[0]);
 
-#ifdef DEBUG
-	print_hex_dump(KERN_INFO, "mcr20a rx: ", DUMP_PREFIX_OFFSET, 16, 1,
-		       lp->rx_buf, len, 0);
-	pr_info("mcr20a rx: lqi: %02hhx\n", lp->rx_lqi[0]);
-#endif
+	print_hex_dump_debug("mcr20a rx: ", DUMP_PREFIX_OFFSET, 16, 1,
+			     lp->rx_buf, len, 0);
+	pr_debug("mcr20a rx: lqi: %02hhx\n", lp->rx_lqi[0]);
 
 	/* start RX sequence */
 	mcr20a_request_rx(lp);
@@ -1051,9 +1007,8 @@ static void mcr20a_hw_setup(struct mcr20a_local *lp)
 			IEEE802154_HW_AFILT |
 			IEEE802154_HW_PROMISCUOUS;
 
-	phy->flags = WPAN_PHY_FLAG_TXPOWER |
-		WPAN_PHY_FLAG_CCA_ED_LEVEL |
-		WPAN_PHY_FLAG_CCA_MODE;
+	phy->flags = WPAN_PHY_FLAG_TXPOWER | WPAN_PHY_FLAG_CCA_ED_LEVEL |
+			WPAN_PHY_FLAG_CCA_MODE;
 
 	phy->supported.cca_modes = BIT(NL802154_CCA_ENERGY) |
 		BIT(NL802154_CCA_CARRIER) | BIT(NL802154_CCA_ENERGY_CARRIER);
@@ -1218,7 +1173,7 @@ mcr20a_phy_init(struct mcr20a_local *lp)
 	if (ret)
 		goto err_ret;
 
-	dev_info(printdev(lp), "overwrites version: 0x%02x\n",
+	dev_info(printdev(lp), "MCR20A DAR overwrites version: 0x%02x\n",
 		 MCR20A_OVERWRITE_VERSION);
 
 	/* Overwrites direct registers  */
@@ -1261,26 +1216,24 @@ mcr20a_phy_init(struct mcr20a_local *lp)
 	if (ret)
 		goto err_ret;
 
-	/* set CCA threshold to -75 dBm */
+	/* Set CCA threshold to -75 dBm */
 	ret = regmap_write(lp->regmap_iar, IAR_CCA1_THRESH, 0x4B);
 	if (ret)
 		goto err_ret;
 
-	/* set prescaller to obtain 1 symbol (16us) timebase */
+	/* Set prescaller to obtain 1 symbol (16us) timebase */
 	ret = regmap_write(lp->regmap_iar, IAR_TMR_PRESCALE, 0x05);
 	if (ret)
 		goto err_ret;
 
-	/* enable autodoze mode. */
-	dev_dbg(printdev(lp), "enable autodoze mode\n");
+	/* Enable autodoze mode. */
 	ret = regmap_update_bits(lp->regmap_dar, DAR_PWR_MODES,
 				 DAR_PWR_MODES_AUTODOZE,
 				 DAR_PWR_MODES_AUTODOZE);
 	if (ret)
 		goto err_ret;
 
-	/* disable clk_out */
-	dev_dbg(printdev(lp), "disable clk_out\n");
+	/* Disable clk_out */
 	ret = regmap_update_bits(lp->regmap_dar, DAR_CLK_OUT_CTRL,
 				 DAR_CLK_OUT_CTRL_EN, 0x0);
 	if (ret)
