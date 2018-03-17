@@ -1,6 +1,8 @@
 # mcr20a-linux
 Linux kernel drivers for NXP MCR20A IEEE 802.15.4 transceiver. This project is aiming at not only enabling all MCR20A feathers to 802.15.4 stack in Linux kernel but also providing setup tutorials and tests.
 
+**UPDATE: This driver will be merged into mainline kernel.**
+
 ## Table of Contents
 
 - [Install](#install)
