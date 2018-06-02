@@ -22,7 +22,7 @@
 				rst_b-gpio = <&gpio 27 1>;
 				/* As RM said, mcr20a can support 9 MHz read accesses
 				and 16MHz write accesses. But lower frequency is stable*/
-				spi-max-frequency = <4000000>;
+				spi-max-frequency = <8000000>;
 			};
 		};
 	};
