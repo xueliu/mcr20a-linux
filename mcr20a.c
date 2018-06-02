@@ -723,13 +723,11 @@ mcr20a_set_promiscuous_mode(struct ieee802154_hw *hw, const bool on)
 	struct mcr20a_local *lp = hw->priv;
 	int ret;
 	u8 rx_frame_filter_reg = 0x0;
-	u8 val;
 
 	dev_dbg(printdev(lp), "%s(%d)\n", __func__, on);
 
 	if (on) {
 		/* All frame types accepted*/
-		val |= DAR_PHY_CTRL4_PROMISCUOUS;
 		rx_frame_filter_reg &= ~(IAR_RX_FRAME_FLT_FRM_VER);
 		rx_frame_filter_reg |= (IAR_RX_FRAME_FLT_ACK_FT |
 				  IAR_RX_FRAME_FLT_NS_FT);
@@ -1269,7 +1267,7 @@ mcr20a_probe(struct spi_device *spi)
 	ret = mcr20a_get_platform_data(spi, pdata);
 	if (ret < 0) {
 		dev_crit(&spi->dev, "mcr20a_get_platform_data failed.\n");
-		return ret;
+		goto free_pdata;
 	}
 
 	/* init reset gpio */
@@ -1277,7 +1275,7 @@ mcr20a_probe(struct spi_device *spi)
 		ret = devm_gpio_request_one(&spi->dev, pdata->rst_gpio,
 					    GPIOF_OUT_INIT_HIGH, "reset");
 		if (ret)
-			return ret;
+			goto free_pdata;
 	}
 
 	/* reset mcr20a */
@@ -1293,7 +1291,8 @@ mcr20a_probe(struct spi_device *spi)
 	hw = ieee802154_alloc_hw(sizeof(*lp), &mcr20a_hw_ops);
 	if (!hw) {
 		dev_crit(&spi->dev, "ieee802154_alloc_hw failed\n");
-		return -ENOMEM;
+		ret = -ENOMEM;
+		goto free_pdata;
 	}
 
 	/* init mcr20a local data */
@@ -1310,8 +1309,10 @@ mcr20a_probe(struct spi_device *spi)
 	/* init buf */
 	lp->buf = devm_kzalloc(&spi->dev, SPI_COMMAND_BUFFER, GFP_KERNEL);
 
-	if (!lp->buf)
-		return -ENOMEM;
+	if (!lp->buf) {
+		ret = -ENOMEM;
+		goto free_dev;
+	}
 
 	mcr20a_setup_tx_spi_messages(lp);
 	mcr20a_setup_rx_spi_messages(lp);
@@ -1368,6 +1369,8 @@ mcr20a_probe(struct spi_device *spi)
 
 free_dev:
 	ieee802154_free_hw(lp->hw);
+free_pdata:
+	kfree(pdata);
 
 	return ret;
 }
