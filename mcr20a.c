@@ -902,32 +902,28 @@ mcr20a_irq_clean_complete(void *context)
 		lp->irq_data[DAR_IRQ_STS1], lp->irq_data[DAR_IRQ_STS2]);
 
 	switch (seq_state) {
-	/* TX IRQ, RX IRQ and SEQ IRQ */
-	case (0x03):
+	case (DAR_IRQSTS1_TXIRQ | DAR_IRQSTS1_SEQIRQ):
 		if (lp->is_tx) {
 			lp->is_tx = 0;
 			mcr20a_handle_tx_complete(lp);
 			dev_dbg(printdev(lp), "TX is done. No ACK\n");
 		}
 		break;
-	case (0x05):
-			/* rx is starting */
+	case (DAR_IRQSTS1_RXIRQ | DAR_IRQSTS1_SEQIRQ):
 			mcr20a_handle_rx(lp);
 			dev_dbg(printdev(lp), "RX is starting\n");
 		break;
-	case (0x07):
+	case (DAR_IRQSTS1_RXIRQ | DAR_IRQSTS1_TXIRQ | DAR_IRQSTS1_SEQIRQ):
 		if (lp->is_tx) {
-			/* tx is done */
 			lp->is_tx = 0;
 			mcr20a_handle_tx_complete(lp);
 			dev_dbg(printdev(lp), "TX is done. Get ACK\n");
 		} else {
-			/* rx is starting */
 			mcr20a_handle_rx(lp);
 			dev_dbg(printdev(lp), "RX is starting\n");
 		}
 		break;
-	case (0x01):
+	case (DAR_IRQSTS1_SEQIRQ):
 		if (lp->is_tx) {
 			mcr20a_handle_tx(lp);
 			dev_dbg(printdev(lp), "TX is starting\n");
