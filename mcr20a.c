@@ -802,6 +802,10 @@ mcr20a_handle_rx_read_buf_complete(void *context)
 		len = IEEE802154_MTU;
 	}
 
+	print_hex_dump_debug("mcr20a rx: ", DUMP_PREFIX_OFFSET, 16, 1,
+		lp->rx_buf, len, 0);
+	pr_debug("mcr20a rx: lqi: %02hhx\n", lp->rx_lqi[0]);
+
 	len = len - 2;  /* get rid of frame check field */
 
 	skb = dev_alloc_skb(len);
@@ -809,11 +813,8 @@ mcr20a_handle_rx_read_buf_complete(void *context)
 		return;
 
 	memcpy(skb_put(skb, len), lp->rx_buf, len);
-	ieee802154_rx_irqsafe(lp->hw, skb, lp->rx_lqi[0]);
 
-	print_hex_dump_debug("mcr20a rx: ", DUMP_PREFIX_OFFSET, 16, 1,
-			     lp->rx_buf, len, 0);
-	pr_debug("mcr20a rx: lqi: %02hhx\n", lp->rx_lqi[0]);
+	ieee802154_rx_irqsafe(lp->hw, skb, lp->rx_lqi[0]);
 
 	/* start RX sequence */
 	mcr20a_request_rx(lp);
@@ -905,31 +906,31 @@ mcr20a_irq_clean_complete(void *context)
 	case (0x03):
 		if (lp->is_tx) {
 			lp->is_tx = 0;
-			dev_dbg(printdev(lp), "TX is done. No ACK\n");
 			mcr20a_handle_tx_complete(lp);
+			dev_dbg(printdev(lp), "TX is done. No ACK\n");
 		}
 		break;
 	case (0x05):
 			/* rx is starting */
-			dev_dbg(printdev(lp), "RX is starting\n");
 			mcr20a_handle_rx(lp);
+			dev_dbg(printdev(lp), "RX is starting\n");
 		break;
 	case (0x07):
 		if (lp->is_tx) {
 			/* tx is done */
 			lp->is_tx = 0;
-			dev_dbg(printdev(lp), "TX is done. Get ACK\n");
 			mcr20a_handle_tx_complete(lp);
+			dev_dbg(printdev(lp), "TX is done. Get ACK\n");
 		} else {
 			/* rx is starting */
-			dev_dbg(printdev(lp), "RX is starting\n");
 			mcr20a_handle_rx(lp);
+			dev_dbg(printdev(lp), "RX is starting\n");
 		}
 		break;
 	case (0x01):
 		if (lp->is_tx) {
-			dev_dbg(printdev(lp), "TX is starting\n");
 			mcr20a_handle_tx(lp);
+			dev_dbg(printdev(lp), "TX is starting\n");
 		} else {
 			dev_dbg(printdev(lp), "MCR20A is stop\n");
 		}
