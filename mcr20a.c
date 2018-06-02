@@ -15,15 +15,15 @@
  */
 #include <linux/kernel.h>
 #include <linux/module.h>
-#include <linux/gpio.h>
+#include <linux/gpio/consumer.h>
 #include <linux/spi/spi.h>
 #include <linux/workqueue.h>
 #include <linux/interrupt.h>
 #include <linux/skbuff.h>
-#include <linux/of_gpio.h>
 #include <linux/regmap.h>
 #include <linux/ieee802154.h>
 #include <linux/debugfs.h>
+#include <linux/irq.h>
 
 #include <net/mac802154.h>
 #include <net/cfg802154.h>
@@ -131,10 +131,6 @@ static const struct reg_sequence mar20a_iar_overwrites[] = {
 };
 
 #define MCR20A_VALID_CHANNELS (0x07FFF800)
-
-struct mcr20a_platform_data {
-	int rst_gpio;
-};
 
 #define MCR20A_MAX_BUF		(127)
 
@@ -409,9 +405,8 @@ static const struct regmap_config mcr20a_iar_regmap = {
 
 struct mcr20a_local {
 	struct spi_device *spi;
-
-	struct ieee802154_hw *hw;
 	struct mcr20a_platform_data *pdata;
+	struct ieee802154_hw *hw;
 	struct regmap *regmap_dar;
 	struct regmap *regmap_iar;
 
@@ -972,20 +967,6 @@ static irqreturn_t mcr20a_irq_isr(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
-static int mcr20a_get_platform_data(struct spi_device *spi,
-				    struct mcr20a_platform_data *pdata)
-{
-	int ret = 0;
-
-	if (!spi->dev.of_node)
-		return -EINVAL;
-
-	pdata->rst_gpio = of_get_named_gpio(spi->dev.of_node, "rst_b-gpio", 0);
-	dev_dbg(&spi->dev, "rst_b-gpio: %d\n", pdata->rst_gpio);
-
-	return ret;
-}
-
 static void mcr20a_hw_setup(struct mcr20a_local *lp)
 {
 	u8 i;
@@ -1245,7 +1226,7 @@ mcr20a_probe(struct spi_device *spi)
 {
 	struct ieee802154_hw *hw;
 	struct mcr20a_local *lp;
-	struct mcr20a_platform_data *pdata;
+	struct gpio_desc *rst_b;
 	int irq_type;
 	int ret = -ENOMEM;
 
@@ -1256,48 +1237,33 @@ mcr20a_probe(struct spi_device *spi)
 		return -EINVAL;
 	}
 
-	pdata = kmalloc(sizeof(*pdata), GFP_KERNEL);
-	if (!pdata)
-		return -ENOMEM;
-
-	/* set mcr20a platform data */
-	ret = mcr20a_get_platform_data(spi, pdata);
-	if (ret < 0) {
-		dev_crit(&spi->dev, "mcr20a_get_platform_data failed.\n");
-		goto free_pdata;
-	}
-
-	/* init reset gpio */
-	if (gpio_is_valid(pdata->rst_gpio)) {
-		ret = devm_gpio_request_one(&spi->dev, pdata->rst_gpio,
-					    GPIOF_OUT_INIT_HIGH, "reset");
-		if (ret)
-			goto free_pdata;
+	rst_b = devm_gpiod_get(&spi->dev, "rst_b", GPIOD_OUT_HIGH);
+	if (IS_ERR(rst_b)) {
+		ret = PTR_ERR(rst_b);
+		if (ret != -EPROBE_DEFER)
+			dev_err(&spi->dev, "Failed to get 'rst_b' gpio: %d",
+				ret);
+		return ret;
 	}
 
 	/* reset mcr20a */
-	if (gpio_is_valid(pdata->rst_gpio)) {
-		usleep_range(10, 20);
-		gpio_set_value_cansleep(pdata->rst_gpio, 0);
-		usleep_range(10, 20);
-		gpio_set_value_cansleep(pdata->rst_gpio, 1);
-		usleep_range(120, 240);
-	}
+	usleep_range(10, 20);
+	gpiod_set_value_cansleep(rst_b, 1);
+	usleep_range(10, 20);
+	gpiod_set_value_cansleep(rst_b, 0);
+	usleep_range(120, 240);
 
 	/* allocate ieee802154_hw and private data */
 	hw = ieee802154_alloc_hw(sizeof(*lp), &mcr20a_hw_ops);
 	if (!hw) {
 		dev_crit(&spi->dev, "ieee802154_alloc_hw failed\n");
-		ret = -ENOMEM;
-		goto free_pdata;
+		return -ENOMEM;
 	}
 
 	/* init mcr20a local data */
 	lp = hw->priv;
 	lp->hw = hw;
 	lp->spi = spi;
-	lp->spi->dev.platform_data = pdata;
-	lp->pdata = pdata;
 
 	/* init ieee802154_hw */
 	hw->parent = &spi->dev;
@@ -1319,15 +1285,14 @@ mcr20a_probe(struct spi_device *spi)
 	lp->regmap_dar = devm_regmap_init_spi(spi, &mcr20a_dar_regmap);
 	if (IS_ERR(lp->regmap_dar)) {
 		ret = PTR_ERR(lp->regmap_dar);
-		dev_err(&spi->dev, "Failed to allocate dar map: %d\n",
-			ret);
+		dev_err(&spi->dev, "Failed to allocate DAR map: %d\n", ret);
 		goto free_dev;
 	}
 
 	lp->regmap_iar = devm_regmap_init_spi(spi, &mcr20a_iar_regmap);
 	if (IS_ERR(lp->regmap_iar)) {
 		ret = PTR_ERR(lp->regmap_iar);
-		dev_err(&spi->dev, "Failed to allocate iar map: %d\n", ret);
+		dev_err(&spi->dev, "Failed to allocate IAR map: %d\n", ret);
 		goto free_dev;
 	}
 
@@ -1346,7 +1311,7 @@ mcr20a_probe(struct spi_device *spi)
 		irq_type = IRQF_TRIGGER_FALLING;
 
 	ret = devm_request_irq(&spi->dev, spi->irq, mcr20a_irq_isr,
-			       irq_type, dev_name(&spi->dev), lp);
+			       IRQF_TRIGGER_FALLING, dev_name(&spi->dev), lp);
 	if (ret) {
 		dev_err(&spi->dev, "could not request_irq for mcr20a\n");
 		ret = -ENODEV;
@@ -1366,9 +1331,6 @@ mcr20a_probe(struct spi_device *spi)
 
 free_dev:
 	ieee802154_free_hw(lp->hw);
-free_pdata:
-	kfree(pdata);
-
 	return ret;
 }
 
@@ -1399,7 +1361,7 @@ MODULE_DEVICE_TABLE(spi, mcr20a_device_id);
 static struct spi_driver mcr20a_driver = {
 	.id_table = mcr20a_device_id,
 	.driver = {
-		.of_match_table = of_match_ptr(mcr20a_of_match),
+		.of_match_table = mcr20a_of_match,
 		.name	= "mcr20a",
 	},
 	.probe      = mcr20a_probe,
