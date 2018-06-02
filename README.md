@@ -55,7 +55,7 @@ Information about the hardware is specified in the Linux device tree. The device
 
 ## Test
 [wpan-tools](https://github.com/linux-wpan/wpan-tools)
-
+If you would like to use wpan-ping, you **must** disable DEBUG to make the driver woking properly.
 ## TODO
 - [x] spi_async
 - [ ] Dual PAN
